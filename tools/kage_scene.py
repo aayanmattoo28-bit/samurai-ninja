@@ -281,8 +281,8 @@ def build_lights(sc):
     area("Key_Warm", coll, (-3.6, -3.4, 4.6), c, 300, (1.0, 0.87, 0.74), 1.2, rig)
     lk = [area("Fill_Cool", coll, (3.8, -3.6, 1.8), c, 40, (0.58, 0.66, 1.0), 4.0, rig),
           # rims aim at the shoulders with a narrow spread so they never graze the feet or the wet slabs
-          area("Rim_Warm_L", coll, (-2.4, 2.9, 3.3), (0, 0, 1.45), 120, (1.0, 0.60, 0.32), 0.45, rig, spread=32),
-          area("Rim_Warm_R", coll, (2.6, 2.7, 2.4), (0, 0, 1.45), 70, (1.0, 0.70, 0.46), 0.45, rig, spread=30),
+          area("Rim_Warm_L", coll, (-1.7, 3.4, 3.2), (0, 0, 1.45), 60, (1.0, 0.60, 0.32), 1.4, rig, spread=32),
+          area("Rim_Warm_R", coll, (1.9, 3.3, 2.4), (0, 0, 1.45), 22, (1.0, 0.70, 0.46), 1.4, rig, spread=30),
           area("Top_Sky_Rim", coll, (0.0, 1.6, 5.0), (0, 0, 1.5), 70, (0.70, 0.76, 1.0), 2.5, rig),
           area("Face_Fill", coll, (0.4, -2.2, 1.55), (0, 0, 1.72), 7, (1.0, 0.82, 0.68), 0.6, rig),
           area("Top_Kasa", coll, (0.0, -1.0, 4.5), (0, 0, 1.8), 25, (1.0, 0.85, 0.7), 1.2, rig),

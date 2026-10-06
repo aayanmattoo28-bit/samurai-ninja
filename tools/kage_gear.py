@@ -9,7 +9,7 @@ from kage_armor import bow_knot, cui_pt, hang_cord, knot, tassel, both, deg, riv
 from kage_body import CUIRASS, HIPS, hip_normal, hip_pt, torso_normal, torso_pt
 from kage_lib import (MD, RNG, TAU, V, box, catmull_path, circle_profile, clamp, cloth_mods, fbm, frame_matrix,
                       frames_along, torn_profile,
-                      grid, interp_smooth, lathe, lerp, limb, lin, look_matrix, mod_solidify, mod_subsurf,
+                      grid, interp_smooth, lathe, lerp, limb, lin, look_matrix, mod_bevel, mod_solidify, mod_subsurf,
                       rect_profile, resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere, rope)
 from kage_mats import M
 
@@ -111,35 +111,44 @@ def build_waist(coll, root):
         red.add(knot(bot + V((0, 0, 0.012)), body_normal(th, 1.0), 0.006, 0.003))
         red.add(tassel(bot, 0.04, 0.0035, 0.007, 12))
 
-    # hanging gold charms (chains of small ornaments) and an inro case at the front of the belt
-    for a, L in ((-5, 0.17), (27, 0.12)):
+    # dark bronze charm chains (pierced medallion, diamond plate, teardrop) and an inro case at the belt front
+    bronze = MD()
+    for a, L, seq in ((-5, 0.22, ("medallion", "diamond", "drop")), (27, 0.13, ("medallion", "drop"))):
         th = deg(a)
         top = body_pt(th, 1.12, 0.036)
         n = body_normal(th, 1.05)
         n = V((n.x, n.y, 0)).normalized()
+        sd = V((0, 0, 1)).cross(n).normalized()
         red.add(tube([top, top + V((0, 0, -0.03)) + n * 0.01], 0.0025, 6))
-        z = top.z - 0.035
-        for k, kind in enumerate(("disc", "bell", "bar", "disc")):
-            c = V((top.x, top.y, z)) + n * (0.012 + 0.01 * k)
-            if kind == "disc":
-                d = lathe([(0.0, 0.003), (0.013, 0.002), (0.014, 0.0), (0.013, -0.002), (0.0, -0.003)], 16)
-                d.transform(look_matrix(c, n))
-                gold.add(d)
-                z -= 0.032
-            elif kind == "bell":
-                b = lathe([(0.0, 0.012), (0.006, 0.010), (0.010, 0.0), (0.011, -0.010), (0.0, -0.010)], 16)
-                b.translate(c)
-                gold.add(b)
-                z -= 0.030
+        c = top + V((0, 0, -0.034)) + n * 0.012
+        for k in range(int((L - (0.11 if len(seq) == 3 else 0.07)) / 0.0075)):
+            lk = torus_md(0.0042, 0.0010, 10, 4)
+            lk.v = [V((p_.x, p_.y * 1.5, p_.z)) for p_ in lk.v]
+            lk.transform(look_matrix(c, sd if k % 2 else n, (0, 0, 1)))
+            bronze.add(lk)
+            c = c + V((0, 0, -0.0075))
+        fm = Matrix((sd, n, V((0, 0, 1)))).transposed().to_4x4()
+        for kind in seq:
+            if kind == "medallion":
+                m_ = torus_md(0.0115, 0.0045, 32, 8)
+                m_.v = [V((p_.x, p_.y, p_.z * 0.35)) for p_ in m_.v]
+                cc = c + V((0, 0, -0.017))
+                m_.transform(look_matrix(cc, n, (0, 0, 1)))
+                c = cc + V((0, 0, -0.019))
+            elif kind == "diamond":
+                m_ = uv_sphere(1.0, 4, 3)
+                m_.v = [V((p_.x * 0.011, p_.y * 0.0025, p_.z * 0.020)) for p_ in m_.v]
+                cc = c + V((0, 0, -0.021))
+                fm.translation = cc
+                m_.transform(fm)
+                c = cc + V((0, 0, -0.022))
             else:
-                b = box(0.010, 0.006, 0.030)
-                b.translate(c)
-                gold.add(b)
-                z -= 0.040
-            if k < 3:
-                red.add(tube([c + V((0, 0, -0.012)), c + V((0, 0, -0.02))], 0.0018, 6))
-            if z < top.z - L:
-                break
+                m_ = lathe([(0.0, 0.0), (0.007, 0.006), (0.009, 0.014), (0.006, 0.022), (0.0, 0.030)], 16)
+                m_.v = [V((p_.x, p_.y * 0.4, p_.z)) for p_ in m_.v]
+                fm.translation = c - V((0, 0, 0.032))
+                m_.transform(fm)
+            bronze.add(m_)
+    to_obj("Belt_Bronze_Charms", bronze, M["gold_dark"], coll, parent=root)
     th = deg(-20)
     top = body_pt(th, 1.12, 0.036)
     n = body_normal(th, 1.0)
@@ -150,13 +159,14 @@ def build_waist(coll, root):
     belt.add(inro)
     red.add(tube([top, ic + V((0, 0, 0.034))], 0.0022, 6))
     red.add(tassel(ic + V((0, 0, -0.034)), 0.035, 0.003, 0.006, 10))
-    nk = uv_sphere(0.012, 12, 8)
+    nk = box(0.024, 0.016, 0.018)  # carved wooden netsuke toggle
     nk.translate(top + n * 0.012 + V((0, 0, 0.016)))
-    gold.add(nk)
+    nob = to_obj("Belt_Netsuke", nk, M["wood"], coll, parent=root)
+    mod_bevel(nob, 0.003, 2)
 
     for name, md, mat, sub in (("Belt_Black_Leather", belt, M["leather_dark"], 1),
                                ("Belt_Brown_Leather", brown, M["leather"], 1),
-                               ("Belt_Gold_Fittings", gold, M["gold"], 0),
+                               ("Belt_Gold_Fittings", gold, M["gold_dark"], 0),
                                ("Belt_Red_Cords", red, M["cord_red"], 0)):
         ob = to_obj(name, md, mat, coll, parent=root)
         if sub:
@@ -358,11 +368,17 @@ def build_skirts(coll, root):
     layers["skirt"].add(hanging_panel(deg(-40), deg(-16), 1.050, lambda th: 0.53, lambda th, z, v: 0.036 + 0.05 * v,
                                       24, 30, 0.012, 3, 0.14, 0.7, seed=6, slits=0.3, strips=2, holes=1,
                                       threads=threads))
+    # printed cloth panels over the front half of the thigh kusazuri (lamellar shows only on the flanks)
+    layers["skirt_top"].add(hanging_panel(deg(41), deg(64), 1.050, lambda th: 0.47, lambda th, z, v: 0.054 + 0.045 * v,
+                                          20, 30, 0.012, 3, 0.14, 0.7, seed=8, slits=0.3, strips=1, holes=1,
+                                          threads=threads))
+    layers["skirt"].add(hanging_panel(deg(-66), deg(-44), 1.050, lambda th: 0.50, lambda th, z, v: 0.054 + 0.045 * v,
+                                      18, 30, 0.012, 3, 0.14, 0.7, seed=9, slits=0.3, strips=1, holes=0,
+                                      threads=threads))
 
     # --- kusazuri lamellar panels -------------------------------------------
     for th_c, wdeg, rows, rh, z_top in ((62, 38, 7, 0.068, 0.985), (-62, 38, 7, 0.068, 0.980),
-                                         (100, 38, 7, 0.072, 0.980), (-100, 38, 7, 0.072, 0.980),
-                                         (136, 36, 7, 0.068, 0.975), (-136, 36, 7, 0.068, 0.975)):
+                                         (104, 36, 7, 0.072, 0.980), (-104, 36, 7, 0.072, 0.980)):
         p, g, r = lamellar_panel(deg(th_c), wdeg, z_top, rows, rh, 0.042, 0.0030)
         plates.add(p)
         gold.add(g)
@@ -501,7 +517,7 @@ def build_swords(coll, root):
 # =============================================================================
 # GEAR: gourds, smoke bombs, pouches, powder flask, kunai holster
 # =============================================================================
-def gourd_md(scale=1.0):
+def gourd_md(scale=1.0, slim=1.0):
     prof = []
     for k in range(41):
         z = 0.16 * k / 40
@@ -512,18 +528,18 @@ def gourd_md(scale=1.0):
         r = max(r, 0.020 * math.exp(-((z - 0.090) / 0.02) ** 2))
         if z > 0.135:
             r = max(r, 0.011)
-        prof.append((r * scale, z * scale))
+        prof.append((r * scale * slim, z * scale))
     prof[0] = (0.0, 0.0)
     prof.append((0.0, 0.16 * scale))
     return lathe(prof, 28)
 
 
-def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0):
+def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0, slim=1.0):
     p = body_pt(theta, z_bot, 0.0)
     n = body_normal(theta, max(z_bot, 0.3))
     n = V((n.x, n.y, 0)).normalized()
     base = body_pt(theta, z_bot + 0.08 * scale, out)
-    g = gourd_md(scale)
+    g = gourd_md(scale, slim)
     m = Matrix.Translation(base) @ Matrix.Rotation(tilt, 4, n.cross(V((0, 0, 1))).normalized())
     coll_mds["gourd"].add(g.copy().transform(m))
     # stopper + cap
@@ -532,7 +548,7 @@ def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0):
     coll_mds["wood"].add(st)
     # cord around the waist of the gourd and up to the belt
     w = m @ V((0, 0, 0.09 * scale))
-    ring = [m @ V((0.022 * scale * math.sin(a), -0.022 * scale * math.cos(a), 0.09 * scale)) for a in lin(0, TAU, 24)[:-1]]
+    ring = [m @ V((0.022 * scale * slim * math.sin(a), -0.022 * scale * slim * math.cos(a), 0.09 * scale)) for a in lin(0, TAU, 24)[:-1]]
     coll_mds["cord"].add(sweep(ring, circle_profile(0.003, 6), closed_path=True, up=(0, 0, 1)))
     top = body_pt(theta, 1.085, 0.034)
     coll_mds["cord"].add(tube(catmull_path([top, (top + w) / 2 + n * 0.015, w + n * 0.02], 6), 0.003, 6))
@@ -601,10 +617,10 @@ def pouch_md(w=0.075, h=0.085, d=0.036):
     return body, flap, metal
 
 
-def place_pouch(theta, z_top, out, mds, scale=1.0, tilt=0.0):
+def place_pouch(theta, z_top, out, mds, scale=1.0, tilt=0.0, h=0.085):
     n = body_normal(theta, z_top - 0.04)
     n = V((n.x, n.y, 0)).normalized()
-    p = body_pt(theta, z_top - 0.045 * scale, out)
+    p = body_pt(theta, z_top - (h / 2 + 0.003) * scale, out)
     m = look_matrix(p, V((0, 0, 1)), -n) @ Matrix.Rotation(0, 4, "Z")
     # local: -Y faces outward
     x = V((0, 0, 1)).cross(-n).normalized()
@@ -612,12 +628,12 @@ def place_pouch(theta, z_top, out, mds, scale=1.0, tilt=0.0):
     z = V((0, 0, 1))
     mm = Matrix((x, y, z)).transposed().to_4x4()
     mm = Matrix.Translation(p) @ Matrix.Rotation(tilt, 4, n) @ mm @ Matrix.Scale(scale, 4)
-    body, flap, metal = pouch_md()
+    body, flap, metal = pouch_md(h=h)
     mds["pouch"].add(body.transform(mm))
     mds["pouch_flap"].add(flap.transform(mm))
     mds["gold"].add(metal.transform(mm))
     top = body_pt(theta, 1.15, 0.03)
-    mds["leather_dark"].add(tube([mm @ V((-0.02, 0.0, 0.045)), top + V((0, 0, -0.01))], 0.004, 6, rx=0.008))
+    mds["leather_dark"].add(tube([mm @ V((-0.02, 0.0, h / 2)), top + V((0, 0, -0.01))], 0.004, 6, rx=0.008))
 
 
 POWDER_BODY = []
@@ -722,20 +738,20 @@ def build_gear(coll, root):
     mds = {k: MD() for k in ("gourd", "gold", "cord", "bomb", "bomb_decal", "pouch", "pouch_flap", "leather_dark",
                              "flask", "flask_tassel", "flask_body", "steel", "grip", "iron", "wood")}
     # gourds (hyotan)
-    place_gourd(deg(14), 0.80, 0.80, 0.085, mds, 0.05)
-    place_gourd(deg(40), 0.82, 0.85, 0.085, mds, -0.04)
+    place_gourd(deg(18), 0.78, 0.95, 0.092, mds, 0.04, slim=0.72)
     place_gourd(deg(172), 0.585, 1.10, 0.100, mds, 0.0)
     # smoke bombs cluster (front right)
-    for k, (th, z, r) in enumerate(((-36, 0.905, 0.047), (-50, 0.975, 0.034), (-60, 0.945, 0.032))):
-        c = body_pt(deg(th), z, 0.105 + r)
+    for k, (th, z, r) in enumerate(((-34, 0.900, 0.050),)):
+        c = body_pt(deg(th), z, 0.080 + r)
         smoke_bomb(c, r, mds, turn=k)
         top = body_pt(deg(th), 1.085, 0.034)
         mds["cord"].add(tube(catmull_path([top, (top + c) / 2 + V((0, -0.01, 0.01)), c + V((0, 0, r * 1.25))], 6),
                              0.0028, 6))
     # pouches
-    for th, zt, sc, tilt in ((-40, 1.050, 1.0, 0.04), (-58, 1.000, 0.95, -0.05), (128, 1.045, 1.05, 0.0),
-                             (-138, 1.045, 1.05, 0.0), (52, 1.03, 0.8, 0.0), (-104, 1.03, 0.85, 0.0)):
-        place_pouch(deg(th), zt, 0.075, mds, sc, tilt)
+    for th, zt, sc, tilt, h, out in ((-40, 1.050, 1.0, 0.04, 0.085, 0.075), (-58, 1.000, 0.95, -0.05, 0.085, 0.085),
+                                     (128, 1.100, 1.05, 0.0, 0.125, 0.075), (-138, 1.100, 1.05, 0.0, 0.125, 0.075),
+                                     (54, 1.050, 1.0, 0.0, 0.115, 0.085), (-104, 1.030, 0.85, 0.0, 0.085, 0.075)):
+        place_pouch(deg(th), zt, out, mds, sc, tilt, h=h)
     # powder flask (right side)
     fl, metal, cord = powder_flask_md()
     p = body_pt(deg(-118), 0.86, 0.12)

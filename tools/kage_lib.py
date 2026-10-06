@@ -1406,12 +1406,12 @@ def mat_leather_tooled(name="Leather_Pouch_Tooled", base=(0.030, 0.012, 0.006), 
     en = nb.noise(obj, 30.0, 4, 0.6)
     edge = nb.math("MULTIPLY", _hard_edges(nb, bev, 0.02, 0.10), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
     col = nb.mix(nb.math("MULTIPLY", edge, 0.7), col, (0.16, 0.085, 0.045))
-    col = nb.mix(nb.math("MULTIPLY", _updust(nb, obj, 10.0), 0.4), col, (0.10, 0.085, 0.07))
+    col = nb.mix(nb.math("MULTIPLY", _updust(nb, obj, 10.0), 0.15), col, (0.10, 0.085, 0.07))
     h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.08), nb.math("MULTIPLY", hi, 1.2))
     wr = nb.noise(obj, 35.0, 5, 0.6)
     h = nb.math("ADD", h, nb.math("MULTIPLY", wr.outputs["Fac"], 0.8))
-    p = nb.principled(Base_Color=col, Roughness=nb.mixf(edge, 0.62, 0.38), Coat_Weight=0.18, Coat_Roughness=0.35,
-                      Normal=nb.bump(h, 0.45, 0.0015, normal=bev))
+    p = nb.principled(Base_Color=col, Roughness=nb.mixf(edge, 0.70, 0.45), Coat_Weight=0.07, Coat_Roughness=0.45,
+                      Specular_IOR_Level=0.35, Normal=nb.bump(h, 0.45, 0.0015, normal=bev))
     nb.output(p.outputs[0])
     m.diffuse_color = (*base, 1)
     return m
