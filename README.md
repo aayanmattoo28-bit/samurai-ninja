@@ -6,7 +6,8 @@ weapon kit, and the Japanese castle courtyard backdrop.
 
 **Blend file:** [`samurai-ninja_claude.blend`](samurai-ninja_claude.blend) (Blender 4.2+, textures packed)
 
-**Rendered sheet:** [`renders/kage_musha_sheet.jpg`](renders/kage_musha_sheet.jpg)
+**Rendered sheet:** [`renders/kage_musha_sheet.jpg`](renders/kage_musha_sheet.jpg) (individual panels in
+[`renders/sheet/`](renders/sheet): turnaround, detail close-ups, item and weapon shots)
 
 ## What's in the .blend
 
