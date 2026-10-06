@@ -112,6 +112,7 @@ TOP_TABLE = [(0, 1.438), (20, 1.452), (38, 1.470), (55, 1.445), (72, 1.385), (88
              (122, 1.445), (140, 1.468), (160, 1.462), (180, 1.456)]
 CUI_BOTTOM = 1.025
 LAME = 0.056
+TH_DO = math.radians(100)  # the do wraps the front and flanks only
 
 
 def cuirass_top(theta):
@@ -147,15 +148,20 @@ def front_pt(x, z, off=0.0, table=CUIRASS, e=2.6):
 
 def build_torso(coll, root):
     # --- under-kimono torso (visible at arm holes, neck, between plates) ------
+    # the do covers only the front and flanks; the back is the printed kimono jacket with drape folds
     def body(u, v, i, j):
         z = v
-        p = torso_pt(u, z, -0.012)
+        a = abs(math.atan2(math.sin(u), math.cos(u)))
+        bk = smooth((a - deg(100)) / deg(10))  # 0 under the do, 1 at the back
+        p = torso_pt(u, z, -0.012 + 0.015 * bk)
         n = V((math.sin(u), -math.cos(u), 0))
-        return p + n * 0.003 * fbm(p * 20)
+        fold = bk * (0.0045 * math.sin(u * 11 + 2.0 * math.sin(z * 9)) * smooth((1.50 - z) / 0.15)
+                     + 0.0030 * math.sin(z * 70 + u * 3) * smooth((1.16 - z) / 0.06))
+        return p + n * (fold + 0.002 * fbm(p * 20))
 
-    md = grid(body, lin(0, TAU, 64), lin(0.86, 1.565, 40), closed_u=True)
-    ob = to_obj("Kimono_Torso", md, M["cloth"], coll, parent=root)
-    mod_subsurf(ob, 1, 2)
+    md = grid(body, lin(0, TAU, 96), lin(0.86, 1.565, 40), closed_u=True)
+    ob = to_obj("Kimono_Torso", md, M["cloth_sleeve"], coll, parent=root)
+    cloth_mods(ob, 2, [(0.003, 0.012, {"stretch": (1, 1, 4)})])
 
     # --- cuirass shell ---------------------------------------------------------
     def shell(u, v, i, j):
@@ -164,7 +170,7 @@ def build_torso(coll, root):
         return cui_pt(u, z)
 
     nv = 48
-    md = grid(shell, lin(0, TAU, 128), lin(0, 1, nv), closed_u=True)
+    md = grid(shell, lin(-TH_DO, TH_DO, 104), lin(0, 1, nv))
     cu = to_obj("Do_Cuirass", md, M["lacquer_engraved"], coll, parent=root)
     mod_solidify(cu, 0.006, 1.0)
     mod_subsurf(cu, 1, 3)
@@ -175,24 +181,25 @@ def build_torso(coll, root):
 
     def loop_path(zf, extra):
         pts, ups = [], []
-        for k in range(N):
-            th = TAU * k / N
+        for k in range(N + 1):
+            th = lerp(-TH_DO, TH_DO, k / N)
             z = zf(th)
             pts.append(cui_pt(th, z, extra))
             ups.append(torso_normal(th, z))
         return pts, ups
 
     pts, ups = loop_path(lambda th: cuirass_top(th) - 0.002, 0.004)
-    trims.add(sweep(pts, circle_profile(0.0045, 8), up=lambda i, p: ups[i], closed_path=True))
+    trims.add(sweep(pts, circle_profile(0.0045, 8), up=lambda i, p: ups[i], cap0=True, cap1=True))
     pts, ups = loop_path(lambda th: CUI_BOTTOM + 0.004, 0.009)
-    trims.add(sweep(pts, rect_profile(0.010, 0.004, 1), up=lambda i, p: ups[i], closed_path=True))
+    trims.add(sweep(pts, rect_profile(0.010, 0.004, 1), up=lambda i, p: ups[i], cap0=True, cap1=True))
     for k in range(1, 5):
         zz = CUI_BOTTOM + k * LAME - 0.004
         pts, ups = loop_path(lambda th, zz=zz: zz, 0.0085)
-        trims.add(sweep(pts, rect_profile(0.006, 0.003, 1), up=lambda i, p: ups[i], closed_path=True))
-    # muna-ita (chest plate) separation line
-    pts, ups = loop_path(lambda th: 1.300 + 0.02 * math.cos(th), 0.005)
-    trims.add(sweep(pts, rect_profile(0.005, 0.003, 1), up=lambda i, p: ups[i], closed_path=True))
+        trims.add(sweep(pts, rect_profile(0.006, 0.003, 1), up=lambda i, p: ups[i], cap0=True, cap1=True))
+    # side-edge rails where the do opens under the arms
+    for s_ in (-1, 1):
+        trims.add(tube([cui_pt(s_ * TH_DO, lerp(CUI_BOTTOM, cuirass_top(s_ * TH_DO), k / 20), 0.006) for k in range(21)],
+                       0.0045, 8))
     tr = to_obj("Do_Gold_Trims", trims, M["gold"], coll, parent=root)
     mod_subsurf(tr, 0, 1)
 
@@ -210,13 +217,29 @@ def build_torso(coll, root):
     to_obj("Do_Rivets", rv, M["gold"], coll, parent=root)
 
     # --- chest crest decal (mon) ---------------------------------------------
-    cz, cr = 1.392, 0.058
+    # raised mune-ita breastplate with a rolled antique-gold border
+    def mplate(u, v, i=0, j=0):
+        x = lerp(-0.105, 0.105, u)
+        th = math.atan2(x, 0.16)
+        z = lerp(1.290, cuirass_top(th) - 0.010, v)
+        return front_pt(x, z, cuirass_off(th, z) + 0.0045)
+
+    mp = to_obj("Do_Muna_Ita", grid(mplate, lin(0, 1, 32), lin(0, 1, 24)), M["lacquer_engraved_s"], coll, parent=root)
+    mod_solidify(mp, 0.004, 1.0)
+    mod_subsurf(mp, 1, 2)
+    edge = ([mplate(k / 24, 0.0) for k in range(25)] + [mplate(1.0, k / 16) for k in range(1, 17)] +
+            [mplate(1.0 - k / 24, 1.0) for k in range(1, 25)] + [mplate(0.0, 1.0 - k / 16) for k in range(1, 16)])
+    edge = [p + V((0, -0.0065, 0)) for p in edge]
+    to_obj("Do_Muna_Ita_Border", sweep(edge, circle_profile(0.0038, 8), up=(0, -1, 0), closed_path=True),
+           M["gold_dark"], coll, parent=root)
+
+    cz, cr = 1.370, 0.047
 
     def crest(u, v, i, j):
         x = lerp(-cr, cr, u)
         z = lerp(cz - cr, cz + cr, v)
         th = math.atan2(x, 0.16)
-        p = front_pt(x, z, cuirass_off(th, z) + 0.0068)
+        p = front_pt(x, z, cuirass_off(th, z) + 0.0095)
         return p
 
     md = grid(crest, lin(0, 1, 24), lin(0, 1, 24))
@@ -226,12 +249,12 @@ def build_torso(coll, root):
     path, ups = [], []
     for k in range(64):
         a = TAU * k / 64
-        x = cr * 0.97 * math.sin(a)
-        z = cz + cr * 0.97 * math.cos(a)
+        x = cr * 0.90 * math.sin(a)
+        z = cz + cr * 0.90 * math.cos(a)
         th = math.atan2(x, 0.16)
-        path.append(front_pt(x, z, cuirass_off(th, z) + 0.0075))
+        path.append(front_pt(x, z, cuirass_off(th, z) + 0.0105))
         ups.append(torso_normal(th, z))
-    ring.add(sweep(path, circle_profile(0.0028, 6), up=lambda i, p: ups[i], closed_path=True))
+    ring.add(sweep(path, rect_profile(0.011, 0.003, 1), up=lambda i, p: ups[i], closed_path=True))
     to_obj("Do_Chest_Mon_Ring", ring, M["gold"], coll, parent=root)
 
     # --- watagami (shoulder straps of the do) --------------------------------
@@ -256,18 +279,24 @@ def build_torso(coll, root):
     to_obj("Do_Watagami_Trim", wat_trim, M["gold"], coll, parent=root)
 
     # --- red cord knots + hanging cords at the chest-plate top corners ----------
+    # big agemaki bows at the breastplate's top corners, with long tasselled cords
     cords = MD()
     for side in (1, -1):
-        th = deg(32) * side
-        z = cuirass_top(th) - 0.008
-        p = cui_pt(th, z, 0.010)
+        x = 0.105 * side
+        th = math.atan2(x, 0.16)
+        z = cuirass_top(th) - 0.016
+        p = front_pt(x, z, cuirass_off(th, z) + 0.016)
         n = torso_normal(th, z)
-        cords.add(knot(p, n, 0.008, 0.0034))
-        for k, (dx, L) in enumerate(((-0.012, 0.075), (0.010, 0.095))):
-            a = p + n * 0.004
-            b = cui_pt(th + deg(dx * 60) * side, z - L, 0.012)
-            cords.add(hang_cord(a, b, 0.0, 0.0028, 8))
-            cords.add(tassel(b, 0.03, 0.003, 0.006, 10))
+        cords.add(bow_knot(p, n, (0, 0, -1), 0.024, 0.085, 0.0040))
+        for dx, L in ((-0.012, 0.080), (0.002, 0.112), (0.014, 0.065)):
+            a = p + n * 0.004 + V((dx * side, 0, -0.008))
+            b = a + V((0.4 * dx * side, 0, -L)) + n * 0.012
+            cords.add(hang_cord(a, b, 0.0, 0.0036, 8))
+            cords.add(tassel(b, 0.050, 0.0038, 0.0095, 14))
+    # side lacing bows where the do closes under the arms
+    for s_ in (-1, 1):
+        for z in (1.10, 1.30):
+            cords.add(bow_knot(cui_pt(s_ * TH_DO, z, 0.010), torso_normal(s_ * TH_DO, z), (0, 0, -1), 0.016, 0.05, 0.003))
     to_obj("Do_Red_Cords", cords, M["cord_red"], coll, parent=root)
 
     build_bandoliers(coll, root)
@@ -303,7 +332,22 @@ def build_bandoliers(coll, root):
     for k, seg in enumerate(straps):
         pts, ups = strap_path(seg, 70)
         leather.add(sweep(pts, rect_profile(W, T, 2), up=lambda i, p, ups=ups: ups[i]))
-        metal.add(rivets_along(pts, 0.06, 0.0032, normals=ups, offset=T * 0.5))
+        # square riveted plates along the strap
+        fr = frames_along(pts, up=lambda i_, p, ups=ups: ups[i_])
+        acc, nxt = 0.0, 0.04
+        for i in range(1, len(pts)):
+            acc += (pts[i] - pts[i - 1]).length
+            if acc < nxt:
+                continue
+            Tn, Nn, B = fr[i]
+            m = Matrix((Tn, Nn, B)).transposed().to_4x4()
+            m.translation = pts[i] + Nn * (T * 0.5 + 0.0013)
+            metal.add(box(0.024, 0.0026, W * 0.62).transform(m))
+            for s in (-1, 1):
+                rv = uv_sphere(0.0026, 8, 5)
+                rv.translate(pts[i] + Nn * (T * 0.5 + 0.0028) + Tn * 0.008 * s)
+                metal.add(rv)
+            nxt += 0.085
     # buckles on the front straps
     for seg, t in ((straps[0], 0.72), (straps[2], 0.70)):
         pts, ups = strap_path(seg, 70)

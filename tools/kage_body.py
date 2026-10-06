@@ -255,7 +255,7 @@ def build_head(coll, parent):
     def cowl(u, v, i, j):
         th = u
         front = max(0.0, math.cos(th))
-        z = lerp(1.662, 1.476, v) - 0.050 * front ** 2 * v ** 1.4
+        z = lerp(1.662, 1.476, v) - 0.022 * front ** 2 * v ** 1.4
         rx = lerp(0.074, 0.178, v ** 1.05)
         ryf = lerp(0.090, 0.158, v)
         ryb = lerp(0.082, 0.146, v)
@@ -306,7 +306,7 @@ def build_head(coll, parent):
     # front V drape tucked into the cuirass
     def drape(u, v, i, j):
         x = lerp(-0.075, 0.075, u)
-        z = lerp(1.545, 1.430, v) + 0.03 * (abs(x) / 0.075) ** 2 * (1 - v)
+        z = lerp(1.548, 1.478, v) + 0.03 * (abs(x) / 0.075) ** 2 * (1 - v)
         th = math.atan2(x, 0.12)
         p = torso_pt(th, z, 0.012)
         p.y -= 0.012 * math.sin(math.pi * u) * (1 - v)
@@ -324,7 +324,7 @@ def build_head(coll, parent):
 
     def bottom_z(th):
         b = 0.5 - 0.5 * math.cos(th)  # 0 front, 1 back
-        return lerp(1.475, 1.410, b ** 1.2)
+        return lerp(1.500, 1.410, b ** 1.2)
 
     ragged = torn_profile(96, 0.03, 9, deep=4, tongues=2)
     SF = [(rng.uniform(0, TAU), rng.uniform(0.06, 0.12), rng.choice((-1, 1)) * rng.uniform(0.6, 1.0)) for _ in range(14)]

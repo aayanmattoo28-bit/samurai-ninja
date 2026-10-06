@@ -295,14 +295,14 @@ def ring(d, S, r_out, r_in):
 
 
 def make_mon_kanji(S=1024):
-    """Chest crest: ring + brush kanji 影 (kage)."""
+    """Chest crest: the clan's winged kamon (same as the back banner), without its thin ring; the thick gold ring
+    band around it is modelled geometry on the breastplate."""
     im = Image.new("L", (S, S), 0)
-    d = ImageDraw.Draw(im)
-    ring(d, S, S * 0.48, S * 0.405)
-    ring(d, S, S * 0.385, S * 0.37)
-    g = glyph("影", int(S * 0.62), "shippori-mincho-b1")
-    paste_center(im, g, S / 2, S / 2)
-    im = im.filter(ImageFilter.GaussianBlur(1.0))
+    bird = Image.open(os.path.join(OUT, "mon_bird.png")).convert("L").resize((S, S), Image.LANCZOS)
+    mask = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(mask).ellipse([S * 0.085, S * 0.085, S * 0.915, S * 0.915], fill=255)
+    im.paste(bird, (0, 0), mask)
+    im = distress(im.filter(ImageFilter.GaussianBlur(1.0)), 0.25, seed=12)
     save(im, "mon_chest.png")
 
 
@@ -717,11 +717,15 @@ if __name__ == "__main__":
     if sys.argv[1:] == ["heights"]:
         make_heights()
         raise SystemExit
+    if sys.argv[1:] == ["mon"]:
+        make_mon_kanji()
+        make_heights(("mon_chest",))
+        raise SystemExit
     make_filigree()
     make_filigree(1024, "filigree_sparse.png", seed=23, density=0.6)
     make_dragon()
-    make_mon_kanji()
     make_mon_bird()
+    make_mon_kanji()  # reuses mon_bird.png
     make_mon_flower()
     make_cloth_print()
     make_cloth_print(1024, "cloth_print_sparse.png", density=0.45, seed=4)
