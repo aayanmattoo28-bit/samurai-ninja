@@ -687,7 +687,36 @@ def make_filigree(S=1024, name="filigree.png", seed=17, density=1.7):
     save(im, name)
 
 
+# ----------------------------------------------------------------------------
+# 13. Height (domed relief) and cavity (grime moat) maps derived from the masks
+# ----------------------------------------------------------------------------
+HEIGHT_SOURCES = ("dragon_emblem", "filigree", "filigree_sparse", "bracer_panel", "suneate_panel", "lamellar_band",
+                  "hat_glyphs", "pouch_tooling", "smokebomb_kanji", "mon_chest", "mon_flower")
+
+
+def make_heights(names=HEIGHT_SOURCES):
+    for nm in names:
+        src = Image.open(os.path.join(OUT, nm + ".png")).convert("L")
+        s = src.width / 1024.0
+        pad = int(24 * s) + 2
+        a = np.pad(np.asarray(src, np.float32) / 255.0, pad, mode="wrap")
+
+        def blur(x, r):
+            im = Image.fromarray((np.clip(x, 0, 1) * 255).astype(np.uint8)).filter(ImageFilter.GaussianBlur(r))
+            return np.asarray(im, np.float32) / 255.0
+
+        b1, b2 = blur(a, 2.5 * s), blur(a, 7.0 * s)
+        dome = blur(a * np.clip(0.35 + 0.9 * b1, 0, 1) * (0.65 + 0.35 * b2), 1.0 * s)
+        cav = np.clip((b2 - a) * 2.5, 0, 1) * (1 - a)
+        for arr, suf in ((dome, "_height"), (cav, "_cavity")):
+            save(Image.fromarray((np.clip(arr[pad:-pad, pad:-pad], 0, 1) * 255).astype(np.uint8)), nm + suf + ".png")
+
+
 if __name__ == "__main__":
+    import sys
+    if sys.argv[1:] == ["heights"]:
+        make_heights()
+        raise SystemExit
     make_filigree()
     make_filigree(1024, "filigree_sparse.png", seed=23, density=0.6)
     make_dragon()
@@ -707,3 +736,4 @@ if __name__ == "__main__":
     make_bracer()  # needs filigree.png
     make_suneate()  # needs filigree.png (generated first)
     make_pouch()
+    make_heights()

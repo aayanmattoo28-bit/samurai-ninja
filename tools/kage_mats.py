@@ -1,14 +1,14 @@
 """All materials for the Kage Musha character (built once, shared by parts)."""
-from kage_lib import (mat_cloth, mat_decal, mat_eye, mat_gold, mat_lacquer, mat_leather, mat_leather_tooled, mat_mail,
-                      mat_metal_engraved, mat_simple, mat_tsuka)
+from kage_lib import (mat_cast_iron, mat_cloth, mat_decal, mat_eye, mat_forged, mat_gold, mat_gourd, mat_lacquer,
+                      mat_leather, mat_leather_tooled, mat_mail, mat_metal_engraved, mat_rope, mat_simple, mat_tsuka)
 
 M = {}
 
 
 def build_materials():
     # --- metals --------------------------------------------------------------
-    M["gold"] = mat_gold("Gold_Trim", (0.54, 0.37, 0.16), 0.38, 0.6)
-    M["gold_dark"] = mat_gold("Gold_Antique", (0.40, 0.26, 0.11), 0.5, 0.65)
+    M["gold"] = mat_gold("Gold_Trim", (0.44, 0.30, 0.13), 0.42, 0.85)
+    M["gold_dark"] = mat_gold("Gold_Antique", (0.30, 0.19, 0.08), 0.52, 0.9)
     M["bronze_rib"] = mat_gold("Bronze_Kasa_Rib", (0.12, 0.072, 0.032), 0.62, 0.6)
     M["bronze"] = mat_gold("Bronze_Patina", (0.42, 0.25, 0.11), 0.4, 0.7)
     M["iron"] = mat_simple("Iron_Dark", (0.035, 0.032, 0.03), rough=0.42, metal=0.9, var_col=(0.13, 0.06, 0.03),
@@ -18,26 +18,29 @@ def build_materials():
     # --- lacquer (urushi) ---------------------------------------------------
     M["lacquer"] = mat_lacquer("Lacquer_Black")
     M["lacquer_dragon_L"] = mat_lacquer("Lacquer_Dragon_L", "dragon_emblem.png", extension="CLIP", relief=0.5,
-                                        wear=0.15, gold_tint=(0.86, 0.60, 0.27))
+                                        wear=0.15, gold_tint=(0.70, 0.49, 0.22), disp=0.0016)
     M["lacquer_dragon_R"] = mat_lacquer("Lacquer_Dragon_R", "dragon_emblem.png", extension="CLIP", relief=0.5,
-                                        wear=0.15, flip_u=True, gold_tint=(0.86, 0.60, 0.27))
+                                        wear=0.15, flip_u=True, gold_tint=(0.70, 0.49, 0.22), disp=0.0016)
     M["lacquer_lamellar"] = mat_lacquer("Lacquer_Lamellar", "lamellar_band.png", uv_scale=(1.0, 1.0), wear=0.6,
-                                        gold_tint=(0.28, 0.18, 0.075), relief=0.2, coat=0.12)
-    M["lacquer_engraved"] = mat_lacquer("Lacquer_Engraved", "filigree.png", uv_scale=(3.0, 1.15), wear=0.3,
-                                        relief=0.25, gold_tint=(0.68, 0.46, 0.19))
+                                        gold_tint=(0.28, 0.18, 0.075), relief=0.2, coat=0.12, disp=0.0004)
+    M["lacquer_engraved"] = mat_lacquer("Lacquer_Engraved", "filigree.png", uv_scale=(3.0, 1.15), wear=0.4,
+                                        relief=0.25, gold_tint=(0.58, 0.40, 0.17), disp=0.0005)
     M["lacquer_engraved_s"] = mat_lacquer("Lacquer_Engraved_Sparse", "filigree_sparse.png", uv_scale=(2.0, 2.0),
                                           wear=0.5, relief=0.2, gold_tint=(0.55, 0.37, 0.15))
-    M["lacquer_bracer"] = mat_lacquer("Lacquer_Bracer", "bracer_panel.png", extension="CLIP", wear=0.25,
-                                      gold_tint=(0.66, 0.45, 0.19))
+    M["lacquer_bracer"] = mat_lacquer("Lacquer_Bracer", "bracer_panel.png", extension="CLIP", wear=0.45,
+                                      gold_tint=(0.55, 0.38, 0.16), disp=0.0008)
     M["cloth_sleeve"] = mat_cloth("Cloth_Sleeve", print_img="cloth_print.png", mapping="TRI", print_scale=(3.0, 3.0),
                                   print_strength=0.6, print_col=(0.32, 0.21, 0.10), dust=0.2)
-    M["lacquer_suneate"] = mat_lacquer("Lacquer_Suneate", "suneate_panel.png", extension="CLIP", wear=0.3,
-                                       gold_tint=(0.62, 0.42, 0.18))
+    M["lacquer_suneate"] = mat_lacquer("Lacquer_Suneate", "suneate_panel.png", extension="CLIP", wear=0.5,
+                                       gold_tint=(0.52, 0.36, 0.15), disp=0.0008)
     M["mail"] = mat_mail("Chainmail_Iron")
-    M["lacquer_hat"] = mat_lacquer("Lacquer_Kasa", "hat_glyphs.png", uv_scale=(1.0, 1.0), wear=0.5, straw=True,
-                                   base=(0.022, 0.016, 0.012), relief=0.15, coat=0.08)
+    M["lacquer_hat"] = mat_lacquer("Lacquer_Kasa", "hat_glyphs.png", uv_scale=(1.0, 1.0), wear=0.6, straw=True,
+                                   base=(0.022, 0.016, 0.012), relief=0.15, coat=0.08, stone=0.0,
+                                   gold_tint=(0.45, 0.30, 0.12))
+    M["kasa_rib"] = mat_lacquer("Lacquer_Kasa_Rib", base=(0.016, 0.012, 0.009), dust=0.45, coat=0.08, stone=0.3,
+                                edge_col=(0.20, 0.10, 0.045))
     M["lacquer_saya"] = mat_lacquer("Lacquer_Saya", "filigree_sparse.png", uv_scale=(1.0, 2.6), wear=0.35,
-                                    relief=0.15, dust=0.12, gold_tint=(0.62, 0.42, 0.18))
+                                    relief=0.15, dust=0.12, gold_tint=(0.62, 0.42, 0.18), stone=0.25)
     # --- cloth ----------------------------------------------------------------
     M["cloth"] = mat_cloth("Cloth_Black", print_img="cloth_print_sparse.png", mapping="TRI", print_scale=(2.2, 2.2),
                            print_strength=0.55, print_col=(0.30, 0.20, 0.09))
@@ -76,16 +79,14 @@ def build_materials():
     M["tassel"] = mat_simple("Tassel_Silk", (0.16, 0.08, 0.028), rough=0.5, sheen=0.15, var_col=(0.12, 0.045, 0.015),
                              wave="BANDS", wave_dir="X", wave_scale=180.0, wave_str=0.9, bump_str=0.4)
     M["leather"] = mat_leather("Leather_Brown", base=(0.032, 0.016, 0.008), light=(0.070, 0.036, 0.018))
-    M["leather_tooled"] = mat_leather_tooled("Leather_Pouch_Tooled", base=(0.024, 0.011, 0.006),
-                                             light=(0.060, 0.026, 0.012))
+    M["leather_tooled"] = mat_leather_tooled("Leather_Pouch_Tooled", base=(0.030, 0.012, 0.006),
+                                             light=(0.085, 0.036, 0.016))
     M["leather_dark"] = mat_leather("Leather_Black", base=(0.012, 0.010, 0.009), light=(0.030, 0.024, 0.020),
                                     rough=0.55)
     M["boot"] = mat_leather("Leather_Boot", base=(0.014, 0.011, 0.009), light=(0.034, 0.026, 0.020), rough=0.7,
                             scuff=0.7, dirt=0.55)
-    M["gourd"] = mat_simple("Gourd_Lacquer", (0.11, 0.034, 0.012), rough=0.46, coat=0.12,
-                            var_col=(0.07, 0.025, 0.01), var_scale=5.0, bump_scale=40.0, bump_str=0.1, dirt=0.35)
-    M["rope"] = mat_simple("Rope_Hemp", (0.13, 0.092, 0.055), rough=0.9, var_col=(0.075, 0.052, 0.03), var_scale=20.0,
-                           wave="BANDS", wave_scale=90.0, wave_str=1.0, bump_str=0.8, sheen=0.0)
+    M["gourd"] = mat_gourd("Gourd_Calabash")
+    M["rope"] = mat_rope("Rope_Hemp")
     M["straw"] = mat_simple("Straw_Sandal", (0.035, 0.025, 0.016), rough=0.85, var_col=(0.08, 0.05, 0.03),
                             wave="BANDS", wave_dir="X", wave_scale=200.0, wave_str=1.0, bump_str=0.5, dirt=0.5)
     M["skin"] = mat_simple("Skin", (0.16, 0.090, 0.060), rough=0.5, sss=0.3, var_col=(0.12, 0.065, 0.045),
@@ -98,9 +99,12 @@ def build_materials():
     # --- decals ---------------------------------------------------------------
     M["decal_mon_chest"] = mat_decal("Decal_Mon_Chest", "mon_chest.png", wear=0.25)
     M["decal_mon_flower"] = mat_decal("Decal_Mon_Flower", "mon_flower.png", wear=0.2)
-    M["decal_smoke"] = mat_decal("Decal_SmokeBomb_Kanji", "smokebomb_kanji.png", wear=0.05, tint=(0.78, 0.56, 0.25),
-                                 rough=0.35)
-    M["bronze_engraved"] = mat_metal_engraved("Bronze_Engraved_Flask", tint=(0.13, 0.08, 0.04), rough=0.58)
+    M["decal_smoke"] = mat_decal("Decal_SmokeBomb_Kanji", "smokebomb_kanji.png", wear=0.35, tint=(0.46, 0.36, 0.20),
+                                 rough=0.55)
+    M["bronze_engraved"] = mat_metal_engraved("Bronze_Engraved_Flask", tint=(0.22, 0.14, 0.07), uv_scale=(2.0, 1.5),
+                                              rough=0.5)
+    M["bomb_iron"] = mat_cast_iron("Iron_Cast_Bomb")
+    M["forged"] = mat_forged("Steel_Forged")
     M["decal_dragon_L"] = mat_decal("Decal_Dragon_L", "dragon_emblem.png", wear=0.25)
     M["decal_mask_flower"] = mat_decal("Decal_Mask_Flower", "mon_flower.png", wear=0.6, tint=(0.17, 0.11, 0.05),
                                        metal=0.2, rough=0.6)

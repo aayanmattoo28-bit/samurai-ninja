@@ -156,7 +156,7 @@ def build_torso(coll, root):
     md = grid(shell, lin(0, TAU, 128), lin(0, 1, nv), closed_u=True)
     cu = to_obj("Do_Cuirass", md, M["lacquer_engraved"], coll, parent=root)
     mod_solidify(cu, 0.006, 1.0)
-    mod_subsurf(cu, 1, 2)
+    mod_subsurf(cu, 1, 3)
 
     # --- gold trims -------------------------------------------------------------
     trims = MD()
@@ -361,7 +361,7 @@ def build_sode(coll, root):
                     z = lerp(zb, zt, v)
                     return ((u - 0.04) / 0.92, (z - vis0) / (vis1 - vis0))
 
-                md = grid(fn, lin(0, 1, 24), lin(0, 1, 8), uv_fn=uvd)
+                md = grid(fn, lin(0, 1, 64), lin(0, 1, 24), uv_fn=uvd)
             else:
                 md = grid(fn, lin(0, 1, 24), lin(0, 1, 8))
             plates[mk].add(md)
@@ -421,7 +421,7 @@ def build_sode(coll, root):
         for mk, mat in (("lacquer", M["lacquer"]), ("dragon", dragon_mat), ("lamellar", M["lacquer_lamellar"])):
             ob = to_obj(f"Sode_{sname}_{mk.capitalize()}", plates[mk].transform(mw), mat, coll, parent=root)
             mod_solidify(ob, 0.0045, -1.0)
-            mod_subsurf(ob, 1, 2)
+            mod_subsurf(ob, 1, 3 if mk == "dragon" else 2)
             objs.append(ob)
         to_obj(f"Sode_{sname}_Gold", gold.transform(mw), M["gold"], coll, parent=root)
         to_obj(f"Sode_{sname}_Gold_Antique", gold_dk.transform(mw), M["gold_dark"], coll, parent=root)
@@ -642,7 +642,7 @@ def build_arms(coll, root):
     tekko_gold.add(ptrim.transform(mh))
 
     for name, md, mat, sub in (("Arm_Sleeves", sleeve, M["cloth_sleeve"], 2), ("Arm_Forearm_Sleeves", forearm, M["cloth"], 1),
-                               ("Kote_Bracers", bracer, M["lacquer_bracer"], 2), ("Kote_Gold", gold, M["gold"], 0),
+                               ("Kote_Bracers", bracer, M["lacquer_bracer"], 3), ("Kote_Gold", gold, M["gold"], 0),
                                ("Kote_Straps", straps, M["leather"], 1), ("Kote_Elbow_Cops", cop, M["lacquer"], 2),
                                ("Gloves", glove, M["leather_dark"], 2), ("Gloves_Tekko", tekko, M["lacquer"], 1),
                                ("Gloves_Tekko_Trim", tekko_gold, M["gold"], 0), ("Arm_Red_Ties", red, M["cord_red"], 0)):
@@ -924,7 +924,7 @@ def build_legs(coll, root):
     for name, md, mat, sub, solid in (
             ("Pants_Hakama", pants, M["cloth_pants"], 2, 0), ("Gaiters_Kyahan", gaiter, M["cloth"], 1, 0),
             ("Suneate_Chainmail", mail, M["mail"], 0, 0), ("Suneate_Borders", gold_dk, M["gold_dark"], 0, 0),
-            ("Suneate_Splints", splints, M["lacquer_suneate"], 1, 0.004), ("Suneate_Gold", gold, M["gold"], 0, 0),
+            ("Suneate_Splints", splints, M["lacquer_suneate"], 3, 0.004), ("Suneate_Gold", gold, M["gold"], 0, 0),
             ("Leg_Red_Ties", red, M["cord_red"], 0, 0), ("Knee_Plates", kneep, M["lacquer"], 1, 0.004),
             ("Boots", boots, M["boot"], 2, 0), ("Sandal_Soles", soles, M["straw"], 0, 0),
             ("Kogake_Foot_Plates", kogake, M["lacquer"], 1, 0.003), ("Sandal_Cords", cords_dark, M["cord_dark"], 0, 0),

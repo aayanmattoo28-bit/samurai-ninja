@@ -853,8 +853,11 @@ def new_mat(name):
     return m
 
 
-def _ao(nb, distance=0.03, only_local=False):
-    """Ambient-occlusion factor (1 = open, 0 = deep crevice)."""
+def _ao(nb, distance=0.03, only_local=True):
+    """Ambient-occlusion factor (1 = open, 0 = deep crevice).
+
+    only_local: occlusion from the object itself only, so transparent decal shells floating a few mm above a
+    surface do not read as crevices (they would turn whole surfaces into grime)."""
     ao = nb.n("ShaderNodeAmbientOcclusion", (-1000, -800))
     ao.samples = 8
     ao.only_local = only_local
@@ -878,21 +881,61 @@ def _updust(nb, obj, scale=10.0):
     return nb.math("MULTIPLY", up, nb.ramp(n.outputs["Fac"], [(0.35, 0.0), (0.7, 1.0)]))
 
 
-def _gold_shader(nb, vec, tint=(0.78, 0.53, 0.22), rough=0.3, tarnish=0.35, scale=18.0):
+def _bevel(nb, radius=0.0025, samples=8):
+    """Rounded-edge shading normal (Cycles Bevel node)."""
+    bv = nb.n("ShaderNodeBevel", (-1000, -1400))
+    bv.samples = samples
+    bv.inputs["Radius"].default_value = radius
+    return bv.outputs["Normal"]
+
+
+def _hard_edges(nb, bevel_n, lo=0.02, hi=0.12, convex_only=True):
+    """Edge mask from the angle between the bevelled and the true normal (resolution independent)."""
+    g = nb.n("ShaderNodeNewGeometry", (-1000, -1600))
+    vm = nb.n("ShaderNodeVectorMath", (-800, -1500))
+    vm.operation = "DOT_PRODUCT"
+    nb.link(bevel_n, vm.inputs[0])
+    nb.link(g.outputs["Normal"], vm.inputs[1])
+    e = nb.ramp(nb.math("SUBTRACT", 1.0, vm.outputs["Value"]), [(lo, 0.0), (hi, 1.0)])
+    if convex_only:
+        e = nb.math("MULTIPLY", e, nb.ramp(_ao(nb, 0.006), [(0.70, 0.0), (0.92, 1.0)]))
+    return e
+
+
+def _gold_shader(nb, vec, tint=(0.78, 0.53, 0.22), rough=0.3, tarnish=0.35, scale=18.0, crest=None, cav=None):
+    """Antique gilt: tarnish breakup, dielectric grime packed in recesses, polished crowns, hammered surface."""
     n = nb.noise(vec, scale, 8, 0.6)
     tar = nb.ramp(n.outputs["Fac"], [(0.35, 0.0), (0.75, 1.0)])
-    col = nb.mix(nb.math("MULTIPLY", tar, tarnish), tint, (0.20, 0.12, 0.05))
-    # dark tarnish packed in crevices, polished bright on the high points
+    col = nb.mix(nb.math("MULTIPLY", tar, tarnish), tint, (0.11, 0.07, 0.03))
     crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.012))
-    col = nb.mix(nb.math("MULTIPLY", crev, 0.85), col, (0.05, 0.03, 0.012))
-    edge = _edges(nb)
+    if cav is not None:
+        crev = nb.math("MAXIMUM", crev, cav)
+    grime = nb.math("MULTIPLY", crev, 0.9)
+    col = nb.mix(grime, col, (0.040, 0.032, 0.025))  # grime colour, not dark metal
+    metal = nb.math("SUBTRACT", 1.0, grime)  # grime and patina are dielectric
+    edge = _hard_edges(nb, _bevel(nb, 0.0008), 0.04, 0.15, False)
     col = nb.mix(nb.math("MULTIPLY", edge, 0.5), col, (min(1, tint[0] * 1.25), min(1, tint[1] * 1.25),
                                                        min(1, tint[2] * 1.2)))
     r = nb.ramp(n.outputs["Fac"], [(0.2, rough * 0.7), (0.8, rough * 1.6)])
     r = nb.mixf(edge, r, rough * 0.5)
-    r = nb.mixf(crev, r, 0.7)
-    g = nb.principled(Base_Color=col, Metallic=1.0, Roughness=r)
+    r = nb.mixf(grime, r, 0.9)
+    if crest is not None:
+        top = nb.ramp(crest, [(0.40, 0.0), (0.80, 1.0)])
+        flank = nb.ramp(crest, [(0.05, 1.0), (0.40, 0.0)])
+        col = nb.mix(nb.math("MULTIPLY", flank, 0.85), col, tuple(c * 0.20 for c in tint))
+        col = nb.mix(nb.math("MULTIPLY", top, 0.75), col, tuple(min(1.0, c * 1.35) for c in tint))
+        r = nb.mixf(top, r, rough * 0.35)
+        r = nb.mixf(flank, r, 0.62)
+    hv = nb.n("ShaderNodeTexVoronoi", (-900, -900), feature="SMOOTH_F1")
+    hv.inputs["Scale"].default_value = 160.0
+    nb.link(vec, hv.inputs["Vector"])
+    g = nb.principled(Base_Color=col, Metallic=metal, Roughness=r, Normal=nb.bump(hv.outputs["Distance"], 0.10, 0.0005))
     return g
+
+
+def _hammer(g):
+    """The hammered-surface normal socket created inside _gold_shader (to chain further bumps onto)."""
+    return g.inputs["Normal"].links[0].from_socket
 
 
 def mat_gold(name="Gold_Trim", tint=(0.78, 0.53, 0.22), rough=0.3, tarnish=0.4):
@@ -909,29 +952,40 @@ def mat_gold(name="Gold_Trim", tint=(0.78, 0.53, 0.22), rough=0.3, tarnish=0.4):
 
 def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.62, 0.42, 0.18),
                 base=(0.010, 0.009, 0.009), wear=0.35, relief=0.35, pattern_rot=0.0, extension="REPEAT",
-                flip_u=False, straw=False, dust=0.25, coat=0.30):
-    """Black urushi lacquer with optional gilded pattern mask."""
+                flip_u=False, straw=False, dust=0.25, coat=0.18, stone=0.6, edge_col=(0.10, 0.034, 0.018), disp=0.0):
+    """Aged black urushi: crusty stone-finish grain, patchy coat with scratches, worn undercoat edges,
+    and optional raised gilt ornament (pattern mask + generated _height/_cavity maps, optional displacement)."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    # base color variation + dust
     n1 = nb.noise(obj, 9.0, 8, 0.6)
     n2 = nb.noise(obj, 55.0, 4, 0.5)
     basecol = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.3, 0.0), (0.8, 1.0)]), base, (0.035, 0.026, 0.020))
     dustmask = nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.55, 0.0), (0.8, 1.0)]), dust)
     basecol = nb.mix(dustmask, basecol, (0.10, 0.085, 0.07))
     rough = nb.mixf(dustmask, nb.math("ADD", nb.math("MULTIPLY", n1.outputs["Fac"], 0.22), 0.34), 0.85)
-    # scratches
+    # scratches (they live in the coat only)
     sc = nb.noise(nb.mapping(obj, (90, 7, 90)), 1.0, 3, 0.5)
     scratch = nb.ramp(sc.outputs["Fac"], [(0.485, 0.0), (0.5, 1.0), (0.515, 0.0)])
     sc2 = nb.noise(nb.mapping(obj, (8, 70, 70)), 1.0, 3, 0.5)
     scratch = nb.math("MAXIMUM", scratch, nb.ramp(sc2.outputs["Fac"], [(0.49, 0.0), (0.5, 0.7), (0.51, 0.0)]))
     basecol = nb.mix(nb.math("MULTIPLY", scratch, 0.5), basecol, (0.06, 0.05, 0.045))
     rough = nb.mixf(scratch, rough, 0.6)
-    height = nb.math("MULTIPLY", scratch, -0.35)
+    height = nb.math("MULTIPLY", scratch, 0.0)
+    if stone > 0:  # ishime-ji stone-finish grain
+        sv = nb.n("ShaderNodeTexVoronoi", (-900, -1700), feature="F1")
+        sv.inputs["Scale"].default_value = 700.0
+        nb.link(obj, sv.inputs["Vector"])
+        grain = nb.ramp(sv.outputs["Distance"], [(0.0, 1.0), (0.45, 0.0)])
+        gfine = nb.noise(obj, 1600.0, 2, 0.5)
+        height = nb.math("ADD", height, nb.math("MULTIPLY", nb.math("ADD", nb.math("MULTIPLY", grain, 0.7),
+                                                                       nb.math("MULTIPLY", gfine.outputs["Fac"], 0.5)),
+                                                 stone * 1.6))
+        basecol = nb.mix(nb.math("MULTIPLY", nb.math("MULTIPLY", grain, nb.ramp(n2.outputs["Fac"], [(0.4, 0.0), (0.7, 1.0)])),
+                                 stone * 0.5), basecol, (0.045, 0.040, 0.034))
+        rough = nb.math("ADD", rough, nb.math("MULTIPLY", grain, 0.12 * stone))
     if straw:
-        # woven straw: concentric + radial fine ridges
         w1 = nb.n("ShaderNodeTexWave", (-900, -500), wave_type="RINGS", rings_direction="Z")
         w1.inputs["Scale"].default_value = 140.0
         w1.inputs["Distortion"].default_value = 1.5
@@ -945,13 +999,17 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         band = nb.ramp(w2.outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)])
         basecol = nb.mix(band, basecol, (0.024, 0.018, 0.013))
         height = nb.math("ADD", height, nb.math("MULTIPLY", band, 0.8))
-    # realism: dust packed into crevices, worn brown edges, dust settled on upward faces
     crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.025))
     basecol = nb.mix(nb.math("MULTIPLY", crev, 0.9), basecol, (0.050, 0.043, 0.036))
     rough = nb.mixf(crev, rough, 0.75)
+    # worn edges: red-brown undercoat, then bare ground on the most worn spots
+    bev = _bevel(nb, 0.0025)
     en = nb.noise(obj, 35.0, 4, 0.6)
-    edge = nb.math("MULTIPLY", _edges(nb, 0.50, 0.535), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.55, 1.0)]))
-    basecol = nb.mix(nb.math("MULTIPLY", edge, 0.55), basecol, (0.11, 0.032, 0.017))
+    edge = nb.math("MULTIPLY", _hard_edges(nb, bev), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.55, 1.0)]))
+    basecol = nb.mix(nb.math("MULTIPLY", edge, 0.7), basecol, edge_col)
+    basecol = nb.mix(nb.math("MULTIPLY", edge, nb.ramp(en.outputs["Fac"], [(0.55, 0.0), (0.7, 1.0)])), basecol,
+                     (0.17, 0.10, 0.055))
+    rough = nb.mixf(edge, rough, 0.28)
     upd = nb.math("MULTIPLY", _updust(nb, obj), dust * 1.3)
     basecol = nb.mix(upd, basecol, (0.115, 0.098, 0.082))
     rough = nb.mixf(upd, rough, 0.85)
@@ -970,41 +1028,64 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         basecol = nb.mix(nb.math("MULTIPLY", chk, 0.9), basecol, (0.095, 0.064, 0.036))
         basecol = nb.mix(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, strand), 0.8), basecol, (0.006, 0.005, 0.004))
         height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 4.0))
-    lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=coat,
-                         Coat_Roughness=0.22, Specular_IOR_Level=0.32)
-    nb.link(nb.math("SUBTRACT", coat, nb.math("MULTIPLY", nb.math("MAXIMUM", upd, crev), coat)),
-            lacq.inputs["Coat Weight"])
-    shader = lacq.outputs[0]
+    hi = cav = mask = None
     if pattern:
-        if mapping == "UV":
-            vec = tc.outputs["UV"]
-        else:
-            vec = tc.outputs[mapping]
-        if flip_u:
-            vec = nb.mapping(vec, (-uv_scale[0], uv_scale[1], 1), (1, 0, 0), (0, 0, pattern_rot))
-        else:
-            vec = nb.mapping(vec, (uv_scale[0], uv_scale[1], 1), (0, 0, 0), (0, 0, pattern_rot))
-        it = nb.img(pattern, vec, extension)
-        mask = it.outputs["Color"]
+        vec = tc.outputs["UV"] if mapping == "UV" else tc.outputs[mapping]
+        vec = nb.mapping(vec, (-uv_scale[0] if flip_u else uv_scale[0], uv_scale[1], 1), (1 if flip_u else 0, 0, 0),
+                         (0, 0, pattern_rot))
+        mask = nb.img(pattern, vec, extension).outputs["Color"]
+        stem = pattern[:-4]
+        hi = nb.img(stem + "_height.png", vec, extension).outputs["Color"]
+        cav = nb.img(stem + "_cavity.png", vec, extension).outputs["Color"]
+        gn_ = nb.noise(obj, 40.0, 5, 0.6)
+        basecol = nb.mix(nb.math("MULTIPLY", cav, 0.85), basecol, (0.004, 0.0035, 0.003))  # black grime moat
+        basecol = nb.mix(nb.math("MULTIPLY", nb.math("MULTIPLY", cav, nb.ramp(gn_.outputs["Fac"], [(0.45, 0.0), (0.7, 1.0)])),
+                                 dust * 2.0), basecol, (0.085, 0.074, 0.060))  # dusty fringe
+        rough = nb.mixf(cav, rough, 0.88)
+    cr_n = nb.noise(obj, 4.0, 6, 0.6)
+    lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=coat,
+                         Coat_Roughness=nb.ramp(cr_n.outputs["Fac"], [(0.3, 0.12), (0.75, 0.45)]),
+                         Specular_IOR_Level=0.4)
+    occl = nb.math("MAXIMUM", upd, crev)
+    if cav is not None:
+        occl = nb.math("MAXIMUM", occl, cav)
+    cw = nb.math("MULTIPLY", nb.math("SUBTRACT", coat, nb.math("MULTIPLY", occl, coat)), nb.math("SUBTRACT", 1.0, edge))
+    nb.link(cw, lacq.inputs["Coat Weight"])
+    nb.link(nb.bump(nb.math("MULTIPLY", scratch, -1.0), 0.3, 0.0003, normal=bev), lacq.inputs["Coat Normal"])
+    shader = lacq.outputs[0]
+    gold = None
+    if pattern:
         wn = nb.noise(obj, 25.0, 6, 0.6)
         wearm = nb.ramp(wn.outputs["Fac"], [(0.25, 1.0 - wear), (0.7, 1.0)])
         gm = nb.math("MULTIPLY", mask, wearm, clamp_=True)
-        gold = _gold_shader(nb, obj, gold_tint, 0.42, 0.45, 25.0)
+        gold = _gold_shader(nb, obj, gold_tint, 0.42, 0.45, 25.0, crest=hi, cav=cav)
         mixs = nb.n("ShaderNodeMixShader", (450, 100))
         nb.link(gm, mixs.inputs[0])
         nb.link(shader, mixs.inputs[1])
         nb.link(gold.outputs[0], mixs.inputs[2])
         shader = mixs.outputs[0]
-        height = nb.math("ADD", height, nb.math("MULTIPLY", mask, relief * 14))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", hi, relief * (4 if disp > 0 else 10)))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", mask, relief * 3))
+        height = nb.math("SUBTRACT", height, nb.math("MULTIPLY", cav, relief * 3))
         eng = nb.noise(obj, 260.0, 2, 0.5)
         height = nb.math("ADD", height, nb.math("MULTIPLY", nb.math("MULTIPLY", eng.outputs["Fac"], mask), 0.8))
-    bmp = nb.bump(height, 0.25, 0.0004)
-    if pattern:
-        bmp = nb.bump(height, 0.45, 0.0010)
+        nb.link(nb.bump(height, 0.45, 0.0010, normal=_hammer(gold)), gold.inputs["Normal"])
+        bmp = nb.bump(height, 0.45, 0.0010, normal=bev)
+    else:
+        bmp = nb.bump(height, 0.25, 0.0004, normal=bev)
     nb.link(bmp, lacq.inputs["Normal"])
-    if pattern:
-        nb.link(bmp, gold.inputs["Normal"])
-    nb.output(shader)
+    out = nb.output(shader)
+    if pattern and disp > 0:
+        dn = nb.n("ShaderNodeDisplacement", (400, -500))
+        dn.space = "OBJECT"
+        dn.inputs["Midlevel"].default_value = 0.0
+        dn.inputs["Scale"].default_value = disp
+        nb.link(nb.math("SUBTRACT", hi, nb.math("MULTIPLY", cav, 0.3)), dn.inputs["Height"])
+        nb.link(dn.outputs["Displacement"], out.inputs["Displacement"])
+        try:
+            m.displacement_method = "BOTH"
+        except AttributeError:
+            m.cycles.displacement_method = "BOTH"
     m.diffuse_color = (*base, 1)
     m.roughness = 0.3
     return m
@@ -1178,9 +1259,11 @@ def mat_simple(name, base, rough=0.5, metal=0.0, coat=0.0, sheen=0.0, bump_scale
                      (0.09, 0.075, 0.06))
     crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.02))
     col = nb.mix(nb.math("MULTIPLY", crev, 0.8), col, (0.02, 0.016, 0.013))
+    bev = None
     if dirt:
+        bev = _bevel(nb, 0.002)
         en = nb.noise(obj, 40.0, 4, 0.6)
-        edge = nb.math("MULTIPLY", _edges(nb, 0.53, 0.58), nb.ramp(en.outputs["Fac"], [(0.45, 0.0), (0.65, 1.0)]))
+        edge = nb.math("MULTIPLY", _hard_edges(nb, bev, 0.02, 0.10), nb.ramp(en.outputs["Fac"], [(0.45, 0.0), (0.65, 1.0)]))
         col = nb.mix(nb.math("MULTIPLY", edge, 0.3 * min(1.0, dirt * 2)), col, (0.10, 0.075, 0.055))
     rough = nb.mixf(crev, rough, min(1.0, rough + 0.3))
     n2 = nb.noise(obj, bump_scale, 6, 0.6)
@@ -1192,7 +1275,7 @@ def mat_simple(name, base, rough=0.5, metal=0.0, coat=0.0, sheen=0.0, bump_scale
         w.inputs["Detail"].default_value = 3.0
         nb.link(tc.outputs[wave_coord], w.inputs["Vector"])
         h = nb.math("ADD", nb.math("MULTIPLY", w.outputs["Fac"], wave_str), nb.math("MULTIPLY", h, 0.3))
-    bmp = nb.bump(h, bump_str, 0.001)
+    bmp = nb.bump(h, bump_str, 0.001, normal=bev)
     kw = dict(Base_Color=col, Roughness=rough, Metallic=metal, Coat_Weight=coat, Sheen_Weight=sheen,
               Normal=bmp)
     if sss:
@@ -1299,33 +1382,58 @@ def mat_mail(name="Chainmail_Iron"):
     return m
 
 
-def mat_leather_tooled(name="Leather_Pouch_Tooled", base=(0.055, 0.027, 0.013), light=(0.12, 0.062, 0.03)):
-    """Worn brown leather with stitched borders + tooled motif (pouch_tooling.png on each face's UV)."""
+def mat_leather_tooled(name="Leather_Pouch_Tooled", base=(0.030, 0.012, 0.006), light=(0.085, 0.036, 0.016)):
+    """Waxed, scuffed red-brown leather with raised embossed tooling (pouch_tooling height/cavity maps)."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    it = nb.img("pouch_tooling.png", tc.outputs["UV"], "CLIP")
-    tool = it.outputs["Color"]
+    hi = nb.img("pouch_tooling_height.png", tc.outputs["UV"], "CLIP").outputs["Color"]
+    cav = nb.img("pouch_tooling_cavity.png", tc.outputs["UV"], "CLIP").outputs["Color"]
     n1 = nb.noise(obj, 9.0, 8, 0.6)
     col = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.3, 0.0), (0.75, 1.0)]), base, light)
+    col = nb.mix(nb.ramp(nb.noise(obj, 3.0, 6, 0.7).outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)]), col,
+                 (0.012, 0.006, 0.003))  # mottling
     vor = nb.n("ShaderNodeTexVoronoi", (-900, -300), feature="DISTANCE_TO_EDGE")
-    vor.inputs["Scale"].default_value = 140.0
+    vor.inputs["Scale"].default_value = 420.0
     nb.link(obj, vor.inputs["Vector"])
     grain = nb.ramp(vor.outputs["Distance"], [(0.0, 0.0), (0.08, 1.0)])
     crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.015))
     col = nb.mix(nb.math("MULTIPLY", crev, 0.8), col, (0.018, 0.010, 0.006))
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(hi, [(0.4, 0.0), (0.8, 1.0)]), 0.6), col, (0.11, 0.055, 0.028))
+    col = nb.mix(nb.math("MULTIPLY", cav, 0.8), col, (0.010, 0.005, 0.003))
+    bev = _bevel(nb, 0.003)
     en = nb.noise(obj, 30.0, 4, 0.6)
-    edge = nb.math("MULTIPLY", _edges(nb), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
-    col = nb.mix(nb.math("MULTIPLY", edge, 0.35), col, (0.13, 0.08, 0.05))
-    col = nb.mix(nb.math("MULTIPLY", tool, 0.7), col, (0.025, 0.013, 0.007))
-    h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.3), nb.math("MULTIPLY", tool, -1.0))
+    edge = nb.math("MULTIPLY", _hard_edges(nb, bev, 0.02, 0.10), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", edge, 0.7), col, (0.16, 0.085, 0.045))
+    col = nb.mix(nb.math("MULTIPLY", _updust(nb, obj, 10.0), 0.4), col, (0.10, 0.085, 0.07))
+    h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.08), nb.math("MULTIPLY", hi, 1.2))
     wr = nb.noise(obj, 35.0, 5, 0.6)
     h = nb.math("ADD", h, nb.math("MULTIPLY", wr.outputs["Fac"], 0.8))
-    p = nb.principled(Base_Color=col, Roughness=nb.mixf(edge, 0.62, 0.35), Coat_Weight=0.08,
-                      Normal=nb.bump(h, 0.45, 0.0015))
+    p = nb.principled(Base_Color=col, Roughness=nb.mixf(edge, 0.62, 0.38), Coat_Weight=0.18, Coat_Roughness=0.35,
+                      Normal=nb.bump(h, 0.45, 0.0015, normal=bev))
     nb.output(p.outputs[0])
     m.diffuse_color = (*base, 1)
+    return m
+
+
+def mat_metal_engraved(name, tint=(0.36, 0.22, 0.10), img="filigree.png", uv_scale=(3.0, 2.0), rough=0.38):
+    """Cast bronze with raised ornament: polished crowns, black-green patina packed in the recesses."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    vec = nb.mapping(tc.outputs["UV"], (uv_scale[0], uv_scale[1], 1))
+    stem = img[:-4]
+    hi = nb.img(stem + "_height.png", vec, "REPEAT").outputs["Color"]
+    cav = nb.img(stem + "_cavity.png", vec, "REPEAT").outputs["Color"]
+    g = _gold_shader(nb, obj, tint, rough, 0.6, 22.0, crest=hi, cav=cav)
+    col_in = g.inputs["Base Color"].links[0].from_socket
+    col = nb.mix(nb.math("MULTIPLY", cav, 0.9), col_in, (0.018, 0.020, 0.013))
+    nb.link(col, g.inputs["Base Color"])
+    nb.link(nb.bump(hi, 0.7, 0.0015, normal=_hammer(g)), g.inputs["Normal"])
+    nb.output(g.outputs[0])
+    m.diffuse_color = (*tint, 1)
     return m
 
 
@@ -1365,7 +1473,8 @@ def mat_leather(name, base=(0.035, 0.017, 0.009), light=(0.075, 0.038, 0.019), r
     col = nb.mix(nb.math("MULTIPLY", crev, 0.85), col, (0.012, 0.007, 0.004))
     col = nb.mix(nb.math("MULTIPLY", crease, 0.5), col, (0.012, 0.007, 0.004))
     en = nb.noise(obj, 25.0, 4, 0.6)
-    edge = nb.math("MULTIPLY", _edges(nb, 0.515, 0.56), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.62, 1.0)]))
+    bev = _bevel(nb, 0.003)
+    edge = nb.math("MULTIPLY", _hard_edges(nb, bev, 0.02, 0.10), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.62, 1.0)]))
     col = nb.mix(nb.math("MULTIPLY", edge, scuff), col, (light[0] * 1.6, light[1] * 1.6, light[2] * 1.6))
     dn = nb.noise(obj, 12.0, 6, 0.6)
     col = nb.mix(nb.math("MULTIPLY", nb.ramp(dn.outputs["Fac"], [(0.55, 0.0), (0.8, 1.0)]), dirt), col,
@@ -1375,7 +1484,126 @@ def mat_leather(name, base=(0.035, 0.017, 0.009), light=(0.075, 0.038, 0.019), r
     h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.35), nb.math("MULTIPLY", crease, -0.6))
     h = nb.math("ADD", h, nb.math("MULTIPLY", nb.noise(obj, 40.0, 5, 0.6).outputs["Fac"], 0.6))
     p = nb.principled(Base_Color=col, Roughness=r, Coat_Weight=0.05, Specular_IOR_Level=0.35,
-                      Normal=nb.bump(h, 0.45, 0.0012))
+                      Normal=nb.bump(h, 0.45, 0.0012, normal=bev))
     nb.output(p.outputs[0])
     m.diffuse_color = (*base, 1)
+    return m
+
+
+def rope(path, r, up=None, closed=False, lay=None, strands=3, n=6):
+    """Three-strand laid rope swept along a path (whole number of turns on closed loops: no seam)."""
+    path = [V(p) for p in path]
+    total = path_length(path + ([path[0]] if closed else []))
+    lay = lay or 7.0 * r
+    lay = total / max(1, round(total / lay))
+    core = resample(path, max(12, int(total / (lay / 12))), closed)
+    fr = frames_along(core, up, closed)
+    acc = [0.0]
+    for a, b in zip(core, core[1:]):
+        acc.append(acc[-1] + (b - a).length)
+    md = MD()
+    for st in range(strands):
+        pts = [p + (Nn * math.cos(TAU * (st / strands + acc[i] / lay)) + B * math.sin(TAU * (st / strands + acc[i] / lay)))
+               * r * 0.56 for i, (p, (T, Nn, B)) in enumerate(zip(core, fr))]
+        md.add(sweep(pts, circle_profile(r * 0.50, n), closed_path=closed, up=lambda i, p, c=core: p - c[i],
+                     cap0=not closed, cap1=not closed))
+    return md
+
+
+def mat_rope(name="Rope_Hemp"):
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    fl = nb.noise(nb.mapping(tc.outputs["UV"], (70.0, 260.0, 1.0)), 1.0, 3, 0.55).outputs["Fac"]
+    col = nb.mix(nb.ramp(nb.noise(obj, 9.0, 6, 0.6).outputs["Fac"], [(0.3, 0.0), (0.75, 1.0)]), (0.085, 0.048, 0.024),
+                 (0.17, 0.105, 0.055))
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(fl, [(0.35, 1.0), (0.6, 0.0)]), 0.6), col, (0.035, 0.020, 0.010))
+    col = nb.mix(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, _ao(nb, 0.004)), 0.9), col, (0.012, 0.008, 0.005))
+    col = nb.mix(nb.math("MULTIPLY", _updust(nb, obj, 12.0), 0.4), col, (0.12, 0.10, 0.08))
+    h = nb.math("ADD", nb.math("MULTIPLY", fl, 0.8), nb.math("MULTIPLY", nb.noise(obj, 600.0, 2, 0.5).outputs["Fac"], 0.3))
+    p = nb.principled(Base_Color=col, Roughness=0.88, Sheen_Weight=0.6, Sheen_Roughness=0.5, Sheen_Tint=(0.9, 0.8, 0.65),
+                      Specular_IOR_Level=0.3, Normal=nb.bump(h, 0.5, 0.0006))
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_gourd(name="Gourd_Calabash", base=(0.20, 0.062, 0.020), light=(0.46, 0.18, 0.06), dark=(0.045, 0.016, 0.008)):
+    """Dried lacquered calabash: mottled orange-brown with sap/smoke blotches, chips, smudged gloss."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    n1 = nb.noise(obj, 11.0, 6, 0.62, distortion=0.6)
+    col = nb.ramp(n1.outputs["Fac"], [(0.30, dark), (0.48, base), (0.70, light)])
+    vb = nb.n("ShaderNodeTexVoronoi", (-900, -400), feature="F1")
+    vb.inputs["Scale"].default_value = 18.0
+    nb.link(obj, vb.inputs["Vector"])
+    blot = nb.math("MULTIPLY", nb.ramp(vb.outputs["Distance"], [(0.0, 1.0), (0.22, 0.0)]),
+                   nb.ramp(nb.noise(obj, 5.0, 4, 0.5).outputs["Fac"], [(0.45, 0.0), (0.6, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", blot, 0.8), col, dark)
+    speck = nb.ramp(nb.noise(obj, 320.0, 2, 0.5).outputs["Fac"], [(0.70, 0.0), (0.74, 1.0)])
+    col = nb.mix(nb.math("MULTIPLY", speck, 0.7), col, (0.55, 0.36, 0.18))
+    crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.02))
+    col = nb.mix(nb.math("MULTIPLY", crev, 0.9), col, (0.03, 0.02, 0.014))
+    upd = nb.math("MULTIPLY", _updust(nb, obj, 14.0), 0.45)
+    col = nb.mix(upd, col, (0.12, 0.10, 0.08))
+    occl = nb.math("MAXIMUM", upd, crev)
+    rough = nb.mixf(occl, nb.ramp(nb.noise(obj, 6.0, 5, 0.6).outputs["Fac"], [(0.35, 0.18), (0.7, 0.42)]), 0.8)
+    h = nb.math("ADD", nb.math("MULTIPLY", nb.noise(obj, 90.0, 4, 0.6).outputs["Fac"], 0.5),
+                nb.math("MULTIPLY", speck, -0.6))
+    p = nb.principled(Base_Color=col, Roughness=rough, Coat_Weight=0.6, Coat_Roughness=0.08, Specular_IOR_Level=0.5,
+                      Normal=nb.bump(h, 0.12, 0.0008))
+    nb.link(nb.math("SUBTRACT", 0.6, nb.math("MULTIPLY", occl, 0.6)), p.inputs["Coat Weight"])
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_cast_iron(name, base=(0.014, 0.013, 0.012), rust=(0.10, 0.042, 0.016), rough=0.62, hammer=45.0):
+    """Hammered, pitted cast iron with brown oxide in the pits and rubbed lighter high spots."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    hv = nb.n("ShaderNodeTexVoronoi", (-900, 0), feature="SMOOTH_F1")
+    hv.inputs["Scale"].default_value = hammer
+    nb.link(obj, hv.inputs["Vector"])
+    dent = hv.outputs["Distance"]
+    pits = nb.ramp(nb.noise(obj, 650.0, 2, 0.5).outputs["Fac"], [(0.60, 0.0), (0.66, 1.0)])
+    h = nb.math("SUBTRACT", dent, nb.math("MULTIPLY", pits, 0.35))
+    crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.015))
+    rustm = nb.math("MAXIMUM", nb.ramp(nb.noise(obj, 8.0, 8, 0.65, distortion=0.3).outputs["Fac"], [(0.64, 0.0), (0.80, 0.5)]),
+                    nb.math("MULTIPLY", nb.ramp(crev, [(0.3, 0.0), (0.8, 1.0)]), 0.5))
+    rustm = nb.math("MAXIMUM", rustm, nb.math("MULTIPLY", pits, 0.6))
+    hiq = nb.ramp(dent, [(0.55, 0.0), (0.85, 1.0)])
+    col = nb.mix(rustm, nb.mix(nb.math("MULTIPLY", hiq, 0.6), base, (0.085, 0.080, 0.075)), rust)
+    p = nb.principled(Base_Color=col, Metallic=nb.mixf(rustm, nb.mixf(hiq, 0.25, 0.7), 0.0),
+                      Roughness=nb.mixf(rustm, nb.mixf(hiq, rough, 0.34), 0.92), Specular_IOR_Level=0.35,
+                      Normal=nb.bump(h, 0.35, 0.002))
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_forged(name, base=(0.045, 0.045, 0.050), polish=(0.50, 0.50, 0.52), rust=(0.10, 0.040, 0.015)):
+    """Dark forged steel: polished edge bevels, cross-grind lines, rust and grime in the recesses."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    bev = _bevel(nb, 0.0012)
+    edge = _hard_edges(nb, bev, 0.01, 0.06, False)
+    grind = nb.noise(nb.mapping(obj, (1.0, 1.0, 40.0)), 120.0, 3, 0.5).outputs["Fac"]
+    rn = nb.ramp(nb.noise(obj, 12.0, 8, 0.65).outputs["Fac"], [(0.58, 0.0), (0.72, 1.0)])
+    rustm = nb.math("MAXIMUM", nb.math("MULTIPLY", rn, nb.math("SUBTRACT", 1.0, edge)),
+                    nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, _ao(nb, 0.01)), 0.8))
+    col = nb.mix(rustm, nb.mix(edge, base, polish), rust)
+    r = nb.mixf(rustm, nb.mixf(edge, 0.42, 0.16), 0.9)
+    tg = nb.n("ShaderNodeTangent", (-600, -800))
+    tg.direction_type = "RADIAL"
+    tg.axis = "Z"
+    hgt = nb.math("ADD", nb.math("MULTIPLY", grind, 0.3), nb.math("MULTIPLY", nb.noise(obj, 700.0, 2, 0.5).outputs["Fac"], 0.2))
+    p = nb.principled(Base_Color=col, Metallic=nb.mixf(rustm, 0.95, 0.0), Roughness=r, Anisotropic=0.55,
+                      Normal=nb.bump(hgt, 0.15, 0.0005, normal=bev))
+    nb.link(tg.outputs["Tangent"], p.inputs["Tangent"])
+    nb.output(p.outputs[0])
     return m

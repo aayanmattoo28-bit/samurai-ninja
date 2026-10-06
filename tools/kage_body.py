@@ -379,32 +379,32 @@ def build_kasa(coll, parent):
         return base + V((r * math.sin(a), -r * math.cos(a), h)) + n * off, n
 
     ribs = MD()
-    nrib = 40
+    nrib = 32
     for k in range(nrib):
         a = TAU * k / nrib
         path, ups = [], []
         for s in range(14):
             r = lerp(0.016, KASA_R - 0.004, s / 13)
-            p, n = surf(r, a, 0.0035)
+            p, n = surf(r, a, 0.0021)
             path.append(p)
             ups.append(n)
-        ribs.add(sweep(path, circle_profile(0.0015, 6, 0.0024), up=lambda i, p, ups=ups: ups[i], cap0=True, cap1=True))
+        ribs.add(sweep(path, rect_profile(0.0075, 0.0040, 2), up=lambda i, p, ups=ups: ups[i], cap0=True, cap1=True))
     # concentric rings
-    for rr in ():
+    for rr in (0.095, 0.170, 0.232):
         path, ups = [], []
         for s in range(97):
-            p, n = surf(rr, TAU * s / 96, 0.0042)
+            p, n = surf(rr, TAU * s / 96, 0.0030)
             path.append(p)
             ups.append(n)
-        ribs.add(sweep(path[:-1], circle_profile(0.0022, 6), up=lambda i, p, ups=ups: ups[i], closed_path=True))
-    rb = to_obj("Kasa_Ribs", ribs, M["bronze_rib"], coll, parent=parent)
+        ribs.add(sweep(path[:-1], rect_profile(0.0055, 0.0028, 1), up=lambda i, p, ups=ups: ups[i], closed_path=True))
+    rb = to_obj("Kasa_Ribs", ribs, M["kasa_rib"], coll, parent=parent)
     mod_subsurf(rb, 0, 1)
 
     # rim band
     path = [base + V((KASA_R * math.sin(TAU * s / 128), -KASA_R * math.cos(TAU * s / 128), kasa_h(KASA_R) - 0.001))
             for s in range(128)]
-    rim = sweep(path, rect_profile(0.010, 0.014, 2), up=(0, 0, 1), closed_path=True)
-    rimo = to_obj("Kasa_Rim", rim, M["gold_dark"], coll, parent=parent)
+    rim = sweep(path, rect_profile(0.012, 0.016, 2), up=(0, 0, 1), closed_path=True)
+    rimo = to_obj("Kasa_Rim", rim, M["kasa_rib"], coll, parent=parent)
     mod_subsurf(rimo, 1, 2)
 
     # finial
@@ -412,7 +412,7 @@ def build_kasa(coll, parent):
                  (0.011, 0.146), (0.008, 0.144), (0.015, 0.142), (0.020, 0.137), (0.021, 0.134), (0.018, 0.131),
                  (0.0, 0.130)], 32)
     fin.translate(base)
-    fo = to_obj("Kasa_Finial", fin, M["gold"], coll, parent=parent)
+    fo = to_obj("Kasa_Finial", fin, M["gold_dark"], coll, parent=parent)
     mod_subsurf(fo, 1, 2)
 
     # inner head ring (hidden support)

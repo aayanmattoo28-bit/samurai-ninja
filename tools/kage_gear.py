@@ -10,7 +10,7 @@ from kage_body import CUIRASS, HIPS, hip_normal, hip_pt, torso_normal, torso_pt
 from kage_lib import (MD, RNG, TAU, V, box, catmull_path, circle_profile, clamp, cloth_mods, fbm, frame_matrix,
                       frames_along, torn_profile,
                       grid, interp_smooth, lathe, lerp, limb, lin, look_matrix, mod_solidify, mod_subsurf,
-                      rect_profile, resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere)
+                      rect_profile, resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere, rope)
 from kage_mats import M
 
 
@@ -540,6 +540,7 @@ def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0):
 
 def smoke_bomb(c, r, coll_mds, turn=0):
     s = uv_sphere(r, 28, 18)
+    s.v = [p * (1 + 0.006 * fbm(p * (40.0 / max(r, 1e-3)) * 0.05)) for p in s.v]  # cast lumps (stay under the decal)
     s.translate(c)
     coll_mds["bomb"].add(s)
     # profile from bottom to top so the kanji texture is upright (image v=0 is the bottom row);
@@ -625,17 +626,17 @@ POWDER_BODY = []
 def powder_flask_md():
     md, metal, cord = MD(), MD(), MD()
     body = MD()
-    prof = [(0.0, 0.0), (0.012, 0.0), (0.018, 0.006), (0.034, 0.028), (0.040, 0.052), (0.036, 0.078),
-            (0.022, 0.096), (0.010, 0.104), (0.009, 0.118), (0.013, 0.122), (0.007, 0.132), (0.004, 0.146),
-            (0.0, 0.150)]
-    body.add(lathe(prof, 32))
+    prof = [(0.0, 0.0), (0.026, 0.0), (0.024, 0.004), (0.012, 0.012), (0.010, 0.020), (0.020, 0.026),
+            (0.034, 0.036), (0.041, 0.054), (0.042, 0.066), (0.038, 0.084), (0.026, 0.100), (0.012, 0.108),
+            (0.009, 0.122), (0.012, 0.126), (0.006, 0.140), (0.003, 0.152), (0.0, 0.156)]
+    body.add(lathe(prof, 40))
     # front medallion
-    med = lathe([(0.0, 0.002), (0.012, 0.0015), (0.013, 0.0), (0.0, 0.0)], 24)
-    med.transform(look_matrix(V((0, -0.039, 0.052)), (0, -1, 0)))
+    med = lathe([(0.0, 0.003), (0.020, 0.0025), (0.021, 0.0), (0.0, 0.0)], 32)
+    med.transform(look_matrix(V((0, -0.043, 0.066)), (0, -1, 0)))
     metal.add(med)
     # bottom tassel
     md.add(tassel(V((0, 0, 0.0)), 0.045, 0.006, 0.014, 16))
-    cord.add(torus_md(0.009, 0.002, 12, 6).transform(look_matrix(V((0, 0, 0.158)), (0, 1, 0))))
+    cord.add(torus_md(0.009, 0.002, 12, 6).transform(look_matrix(V((0, 0, 0.162)), (0, 1, 0))))
     POWDER_BODY.append(body)
     return md, metal, cord
 
@@ -705,15 +706,15 @@ def rope_coil_md(height=0.27, width=0.11, loops=7, r=0.0062):
             p = V((x, y, z))
             p = Matrix.Rotation(yaw, 3, "Z") @ p
             pts.append(p + V((ox * pinch, 0.012 * f, 0)))
-        md.add(sweep(pts, circle_profile(r, 6), closed_path=True, up=(0, 1, 0)))
+        md.add(rope(pts, r, up=(0, 1, 0), closed=True))
     # binding wraps at the top
     for q in range(5):
         t = torus_md(0.022, r * 0.9, 16, 6)
         t.transform(look_matrix(V((0, 0, -0.010 - q * 0.0085)), (0, 0, 1)))
         md.add(t)
     # hanging free end
-    md.add(tube(catmull_path([V((0.01, 0, -0.03)), V((0.03, -0.01, -0.12)), V((0.02, -0.012, -0.22)),
-                              V((0.035, -0.01, -0.30))], 6), r, 6))
+    md.add(rope(catmull_path([V((0.01, 0, -0.03)), V((0.03, -0.01, -0.12)), V((0.02, -0.012, -0.22)),
+                              V((0.035, -0.01, -0.30))], 6), r))
     return md
 
 
@@ -763,10 +764,10 @@ def build_gear(coll, root):
         mds["grip"].add(g.transform(km))
         mds["iron"].add(r.transform(km))
 
-    mats = {"gourd": M["gourd"], "gold": M["gold"], "cord": M["cord_red"], "bomb": M["iron"],
+    mats = {"gourd": M["gourd"], "gold": M["gold"], "cord": M["cord_red"], "bomb": M["bomb_iron"],
             "bomb_decal": M["decal_smoke"], "pouch": M["leather_tooled"], "pouch_flap": M["leather_tooled"],
             "leather_dark": M["leather_dark"], "flask_tassel": M["cord_red"], "flask_body": M["bronze_engraved"],
-            "steel": M["steel"],
+            "steel": M["forged"],
             "grip": M["cord_dark"], "iron": M["iron"]}
     names = {"gourd": "Gourds_Hyotan", "gold": "Gear_Gold_Fittings", "cord": "Gear_Red_Cords",
              "bomb": "Smoke_Bombs", "bomb_decal": "Smoke_Bombs_Kanji", "pouch": "Utility_Pouches",
@@ -845,7 +846,7 @@ def build_back(coll, root):
     ob = to_obj("Rope_Coil", rope.transform(mm), M["rope"], coll, parent=root)
     hook = grappling_hook_md()
     hm = Matrix.Translation(body_pt(deg(118), 0.98, 0.09)) @ Matrix.Rotation(math.pi, 4, "X") @ Matrix.Scale(0.9, 4)
-    to_obj("Grappling_Hook", hook.transform(hm), M["iron"], coll, parent=root)
+    to_obj("Grappling_Hook", hook.transform(hm), M["forged"], coll, parent=root)
     # cord tying the coil to the belt
     top = body_pt(th, 1.085, 0.034)
     to_obj("Rope_Tie", tube([top, mm @ V((0, 0, 0.0))], 0.004, 6), M["cord_red"], coll, parent=root)
@@ -857,7 +858,7 @@ def build_back(coll, root):
 def build_showcase_items(coll, origin):
     o = V(origin)
     mds = {k: MD() for k in ("gourd", "gold", "cord", "bomb", "bomb_decal", "pouch", "pouch_flap", "leather_dark",
-                             "flask_tassel", "flask_body", "steel", "grip", "iron", "rope")}
+                             "flask_tassel", "flask_body", "steel", "grip", "iron", "rope", "hook")}
     # smoke bombs x3
     tops = []
     for k in range(3):
@@ -892,7 +893,7 @@ def build_showcase_items(coll, origin):
         mds["iron"].add(r.transform(km))
     # grappling hook + rope coil lying flat
     hook = grappling_hook_md()
-    mds["iron"].add(hook.transform(Matrix.Translation(o + V((-0.05, 0, 0.08))) @ Matrix.Rotation(0.9, 4, "Y")))
+    mds["hook"].add(hook.transform(Matrix.Translation(o + V((-0.05, 0, 0.08))) @ Matrix.Rotation(0.9, 4, "Y")))
     coil = MD()
     for k in range(9):
         pts = []
@@ -900,13 +901,13 @@ def build_showcase_items(coll, origin):
             a = TAU * q / 48
             rr = 0.07 + k * 0.004
             pts.append(o + V((0.12 + rr * math.cos(a), rr * math.sin(a) * 0.9, 0.007 + 0.011 * (k % 3))))
-        coil.add(sweep(pts, circle_profile(0.006, 6), closed_path=True, up=(0, 0, 1)))
+        coil.add(rope(pts, 0.006, up=(0, 0, 1), closed=True))
     mds["rope"].add(coil)
-    mats = {"gourd": M["gourd"], "gold": M["gold"], "cord": M["cord_red"], "bomb": M["iron"],
+    mats = {"gourd": M["gourd"], "gold": M["gold"], "cord": M["cord_red"], "bomb": M["bomb_iron"],
             "bomb_decal": M["decal_smoke"], "pouch": M["leather_tooled"], "pouch_flap": M["leather_tooled"],
             "leather_dark": M["leather_dark"], "flask_tassel": M["cord_red"], "flask_body": M["bronze_engraved"],
-            "steel": M["steel"],
-            "grip": M["cord_dark"], "iron": M["iron"], "rope": M["rope"]}
+            "steel": M["forged"],
+            "grip": M["cord_dark"], "iron": M["iron"], "rope": M["rope"], "hook": M["forged"]}
     for k, md in mds.items():
         if not md.v:
             continue
