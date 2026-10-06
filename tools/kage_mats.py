@@ -9,7 +9,7 @@ def build_materials():
     # --- metals --------------------------------------------------------------
     M["gold"] = mat_gold("Gold_Trim", (0.54, 0.37, 0.16), 0.38, 0.6)
     M["gold_dark"] = mat_gold("Gold_Antique", (0.40, 0.26, 0.11), 0.5, 0.65)
-    M["bronze_rib"] = mat_gold("Bronze_Kasa_Rib", (0.26, 0.15, 0.065), 0.5, 0.6)
+    M["bronze_rib"] = mat_gold("Bronze_Kasa_Rib", (0.12, 0.072, 0.032), 0.62, 0.6)
     M["bronze"] = mat_gold("Bronze_Patina", (0.42, 0.25, 0.11), 0.4, 0.7)
     M["iron"] = mat_simple("Iron_Dark", (0.035, 0.032, 0.03), rough=0.42, metal=0.9, var_col=(0.13, 0.06, 0.03),
                            var_scale=12.0, bump_scale=120.0, bump_str=0.15, dirt=0.3)
@@ -39,7 +39,7 @@ def build_materials():
     M["lacquer_saya"] = mat_lacquer("Lacquer_Saya", "filigree_sparse.png", uv_scale=(1.0, 2.6), wear=0.35,
                                     relief=0.15, dust=0.12, gold_tint=(0.62, 0.42, 0.18))
     # --- cloth ----------------------------------------------------------------
-    M["cloth"] = mat_cloth("Cloth_Black", print_img="cloth_print_sparse.png", print_scale=(2, 2), print_strength=0.35,
+    M["cloth"] = mat_cloth("Cloth_Black", print_img="cloth_print_sparse.png", print_scale=(2, 2), print_strength=0.55,
                          print_col=(0.26, 0.17, 0.08))
     M["cloth_plain"] = mat_cloth("Cloth_Black_Plain")
     M["cloth_hood"] = mat_cloth("Cloth_Hood", base=(0.011, 0.0105, 0.011), fade=(0.024, 0.022, 0.022), dust=0.10,
@@ -56,7 +56,7 @@ def build_materials():
     M["cloth_banner"] = mat_cloth("Cloth_Banner", print_img="banner_print.png", print_scale=(1, 1),
                                   extension="CLIP", print_strength=1.0, print_col=(0.56, 0.39, 0.17), fray=0.07)
     M["cloth_pants"] = mat_cloth("Cloth_Pants", print_img="cloth_print_sparse.png", print_scale=(3, 3),
-                                 print_strength=0.22, dust=0.25, print_col=(0.24, 0.16, 0.08))
+                                 print_strength=0.5, dust=0.25, print_col=(0.30, 0.20, 0.09))
     M["cloth_red"] = mat_cloth("Cloth_Crimson", base=(0.08, 0.008, 0.008), fade=(0.14, 0.02, 0.017),
                                print_img="cloth_print_sparse.png", print_scale=(2, 2), print_strength=0.3,
                                print_col=(0.40, 0.22, 0.09), fray=0.07)
@@ -82,7 +82,7 @@ def build_materials():
                            wave="BANDS", wave_scale=90.0, wave_str=1.0, bump_str=0.8, sheen=0.0)
     M["straw"] = mat_simple("Straw_Sandal", (0.035, 0.025, 0.016), rough=0.85, var_col=(0.08, 0.05, 0.03),
                             wave="BANDS", wave_dir="X", wave_scale=200.0, wave_str=1.0, bump_str=0.5, dirt=0.5)
-    M["skin"] = mat_simple("Skin", (0.26, 0.15, 0.10), rough=0.5, sss=0.3, var_col=(0.20, 0.11, 0.075),
+    M["skin"] = mat_simple("Skin", (0.16, 0.090, 0.060), rough=0.5, sss=0.3, var_col=(0.12, 0.065, 0.045),
                            var_scale=30.0, bump_scale=300.0, bump_str=0.05)
     M["eye"] = mat_eye("Eye")
     M["tsuka"] = mat_tsuka("Tsuka_Wrap_Red", same=(0.36, 0.035, 0.025))
@@ -96,7 +96,7 @@ def build_materials():
                                  rough=0.35)
     M["bronze_engraved"] = mat_metal_engraved("Bronze_Engraved_Flask", tint=(0.13, 0.08, 0.04), rough=0.58)
     M["decal_dragon_L"] = mat_decal("Decal_Dragon_L", "dragon_emblem.png", wear=0.25)
-    M["decal_mask_flower"] = mat_decal("Decal_Mask_Flower", "mon_flower.png", wear=0.35, tint=(0.40, 0.27, 0.12),
-                                       metal=0.3, rough=0.5)
+    M["decal_mask_flower"] = mat_decal("Decal_Mask_Flower", "mon_flower.png", wear=0.6, tint=(0.17, 0.11, 0.05),
+                                       metal=0.2, rough=0.6)
     M["decal_dragon_R"] = mat_decal("Decal_Dragon_R", "dragon_emblem.png", wear=0.25, flip_u=True)
     return M

@@ -647,6 +647,11 @@ def build_arms(coll, root):
                                ("Gloves", glove, M["leather_dark"], 2), ("Gloves_Tekko", tekko, M["lacquer"], 1),
                                ("Gloves_Tekko_Trim", tekko_gold, M["gold"], 0), ("Arm_Red_Ties", red, M["cord_red"], 0)):
         ob = to_obj(name, both(md), mat, coll, parent=root)
+        if name in ("Arm_Sleeves", "Arm_Forearm_Sleeves"):
+            from kage_lib import mod_wrinkle
+            mod_subsurf(ob, 1, sub)
+            mod_wrinkle(ob, 0.004, 0.02)
+            continue
         if name in ("Kote_Bracers", "Gloves_Tekko"):
             mod_solidify(ob, 0.0035, -1.0)
         if sub:
@@ -929,4 +934,7 @@ def build_legs(coll, root):
             mod_solidify(ob, solid, -1.0)
         if sub:
             mod_subsurf(ob, 1, sub)
+        if name in ("Pants_Hakama", "Gaiters_Kyahan", "Shin_Tatters"):
+            from kage_lib import mod_wrinkle
+            mod_wrinkle(ob, 0.005, 0.025)
     to_obj("Knee_Mon", both(knee_crest), M["decal_mon_flower"], coll, parent=root)

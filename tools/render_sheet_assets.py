@@ -94,7 +94,7 @@ def main():
         res = (int(700 * S), int(530 * S)) if "Waist" in v else (int(420 * S), int(500 * S))
         ff = bpy.data.objects.get("Face_Fill")
         if ff is not None:
-            ff.data.energy = 30 if v == "Mask" else 7
+            ff.data.energy = 24 if v == "Mask" else 7
         render(sc, bpy.data.objects["CAM_Detail_" + v], os.path.join(out, f"detail_{v}.png"), res, spp)
         if ff is not None:
             ff.data.energy = 7

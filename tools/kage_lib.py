@@ -575,6 +575,31 @@ def mod_bevel(ob, w, segs=2, limit="ANGLE"):
     return m
 
 
+_WRINKLE_TEX = {}
+
+
+def mod_wrinkle(ob, strength=0.003, size=0.025, kind="CLOUDS"):
+    """Geometric micro-wrinkles for cloth (displace along normals after subdivision)."""
+    key = (kind, size)
+    tex = _WRINKLE_TEX.get(key)
+    if tex is None:
+        tex = bpy.data.textures.new(f"Wrinkle_{kind}_{size}", kind)
+        if kind == "CLOUDS":
+            tex.noise_scale = size
+            tex.noise_depth = 2
+            tex.noise_basis = "BLENDER_ORIGINAL"
+        elif kind == "STUCCI":
+            tex.noise_scale = size
+            tex.turbulence = 6.0
+        _WRINKLE_TEX[key] = tex
+    m = ob.modifiers.new("Wrinkles", "DISPLACE")
+    m.texture = tex
+    m.texture_coords = "GLOBAL"
+    m.strength = strength
+    m.mid_level = 0.5
+    return m
+
+
 def mod_weighted_normals(ob):
     try:
         m = ob.modifiers.new("WeightedNormal", "WEIGHTED_NORMAL")
@@ -871,16 +896,17 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         rough = nb.math("ADD", nb.math("MULTIPLY", rough, 0.5), 0.35)
         sepw = nb.n("ShaderNodeSeparateXYZ", (-1100, -900))
         nb.link(tc.outputs["UV"], sepw.inputs[0])
-        fu = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[0], 160.0))
-        fv = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[1], 30.0))
+        fu = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[0], 130.0))
+        fv = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[1], 26.0))
         cu = nb.math("GREATER_THAN", fu, 0.5)
         cv = nb.math("GREATER_THAN", fv, 0.5)
         chk = nb.math("ABSOLUTE", nb.math("SUBTRACT", cu, cv))
         strand = nb.math("MULTIPLY", nb.math("SINE", nb.math("MULTIPLY", fu, 3.14159)),
                          nb.math("SINE", nb.math("MULTIPLY", fv, 3.14159)))
         weave_h = nb.math("ADD", nb.math("MULTIPLY", chk, 0.6), nb.math("MULTIPLY", strand, 0.6))
-        basecol = nb.mix(nb.math("MULTIPLY", chk, 0.8), basecol, (0.070, 0.048, 0.028))
-        height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 2.0))
+        basecol = nb.mix(nb.math("MULTIPLY", chk, 0.9), basecol, (0.095, 0.064, 0.036))
+        basecol = nb.mix(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, strand), 0.8), basecol, (0.006, 0.005, 0.004))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 4.0))
     lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=coat,
                          Coat_Roughness=0.22, Specular_IOR_Level=0.32)
     nb.link(nb.math("SUBTRACT", coat, nb.math("MULTIPLY", nb.math("MAXIMUM", upd, crev), coat)),
@@ -1096,9 +1122,9 @@ def mat_eye(name="Eye"):
     nb.link(tc.outputs["Object"], sep.inputs[0])
     # local +Z is the gaze direction; normalise by radius 0.0125
     z = nb.math("DIVIDE", sep.outputs[2], 0.0125)
-    col = nb.ramp(z, [(0.70, (0.20, 0.14, 0.12)), (0.80, (0.30, 0.26, 0.24)), (0.845, (0.10, 0.05, 0.025)),
-                      (0.93, (0.055, 0.028, 0.014)), (0.95, (0.004, 0.003, 0.003))])
-    p = nb.principled(Base_Color=col, Roughness=0.25, Coat_Weight=0.6, Coat_Roughness=0.08)
+    col = nb.ramp(z, [(0.70, (0.12, 0.085, 0.07)), (0.80, (0.20, 0.17, 0.155)), (0.845, (0.075, 0.038, 0.019)),
+                      (0.93, (0.045, 0.023, 0.011)), (0.95, (0.004, 0.003, 0.003))])
+    p = nb.principled(Base_Color=col, Roughness=0.3, Coat_Weight=0.35, Coat_Roughness=0.12)
     nb.output(p.outputs[0])
     return m
 
@@ -1164,7 +1190,7 @@ def mat_leather_tooled(name="Leather_Pouch_Tooled", base=(0.055, 0.027, 0.013), 
     col = nb.mix(nb.math("MULTIPLY", crev, 0.8), col, (0.018, 0.010, 0.006))
     en = nb.noise(obj, 30.0, 4, 0.6)
     edge = nb.math("MULTIPLY", _edges(nb), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
-    col = nb.mix(nb.math("MULTIPLY", edge, 0.8), col, (0.20, 0.13, 0.08))
+    col = nb.mix(nb.math("MULTIPLY", edge, 0.35), col, (0.13, 0.08, 0.05))
     col = nb.mix(nb.math("MULTIPLY", tool, 0.7), col, (0.025, 0.013, 0.007))
     h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.3), nb.math("MULTIPLY", tool, -1.0))
     wr = nb.noise(obj, 35.0, 5, 0.6)

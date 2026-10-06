@@ -3,7 +3,7 @@ import math
 
 from mathutils import Matrix, Vector
 
-from kage_lib import (MD, TAU, V, ang, catmull_path, clamp, fbm, grid, interp_smooth, lathe, lin, look_matrix,
+from kage_lib import (MD, TAU, V, mod_wrinkle, ang, catmull_path, clamp, fbm, grid, interp_smooth, lathe, lin, look_matrix,
                       mod_solidify, mod_subsurf, nz, sweep, to_obj, torus_md, tube, uv_sphere, smooth, lerp,
                       RNG, circle_profile, rect_profile)
 from kage_mats import M
@@ -92,6 +92,8 @@ def hip_pt(theta, z, off=0.0, e=2.3):
 def hip_normal(theta, z):
     return torso_normal(theta, z, HIPS)
 
+
+HOOD_OBJ = []
 
 # -----------------------------------------------------------------------------
 # Head, eyes, hood + mask
@@ -183,7 +185,7 @@ def build_head(coll, parent):
         if t >= 1.0:
             return MID - 0.003, MID + 0.003, False
         lower0 = 1.737 + 0.007 * math.exp(-(math.degrees(th) / 9.0) ** 2 if abs(math.sin(th)) < 0.5 else 0.0)
-        upper0 = 1.773 - 0.004 * t * t
+        upper0 = 1.769 - 0.004 * t * t
         h = (1 - t ** 2.5) ** 0.6
         lo = MID - (MID - lower0) * h
         hi = MID + (upper0 - MID) * h
@@ -225,10 +227,11 @@ def build_head(coll, parent):
 
     md = grid(hood_fn, us, vs, closed_u=True, keep=keep, pole_v1=False)
     hood = to_obj("Hood_Mask", md, M["cloth_hood"], coll, parent=parent)
+    HOOD_OBJ.append(hood)
     # embroidered gold flower on the mask cheek (as in the mask detail of the concept)
     def emb(u, v, i, j):
-        th = deg(lerp(14, 34, u))
-        z = lerp(1.682, 1.716, v)
+        th = deg(lerp(17, 31, u))
+        z = lerp(1.688, 1.712, v)
         p = torso_pt(th, z, 0.0, HOOD, 2.0)
         front = max(0.0, math.cos(th))
         p.y -= 0.010 * front ** 6 * math.exp(-((z - 1.715) / 0.022) ** 2)
@@ -237,6 +240,7 @@ def build_head(coll, parent):
     to_obj("Mask_Embroidery", grid(emb, lin(0, 1, 8), lin(0, 1, 8)), M["decal_mask_flower"], coll, parent=parent)
     mod_solidify(hood, 0.005, 1.0)
     mod_subsurf(hood, 1, 2)
+    mod_wrinkle(hood, 0.0025, 0.012)
 
     # scarf / cowl: one wrapped surface with diagonal rolls and creases
     scarf = MD()
@@ -276,6 +280,7 @@ def build_head(coll, parent):
     sc = to_obj("Neck_Scarf", scarf, M["cloth_hood"], coll, parent=parent)
     mod_solidify(sc, 0.004, -1.0)
     mod_subsurf(sc, 1, 2)
+    mod_wrinkle(sc, 0.006, 0.02)
 
     # shawl / capelet over the shoulders & upper back (tattered hem)
     rng = RNG
@@ -301,6 +306,7 @@ def build_head(coll, parent):
     sh = to_obj("Shawl_Cowl", md, M["cloth_hood"], coll, parent=parent)
     mod_solidify(sh, 0.004, 1.0)
     mod_subsurf(sh, 1, 2)
+    mod_wrinkle(sh, 0.005, 0.025)
 
 
 # -----------------------------------------------------------------------------

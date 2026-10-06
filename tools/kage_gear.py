@@ -330,6 +330,9 @@ def build_skirts(coll, root):
             mod_solidify(ob, solid, 0.0)
         if sub:
             mod_subsurf(ob, 1, sub)
+        if mat.name.startswith("Cloth"):
+            from kage_lib import mod_wrinkle
+            mod_wrinkle(ob, 0.004, 0.03)
 
 
 # =============================================================================
@@ -475,12 +478,14 @@ def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0):
     coll_mds["cord"].add(tube(catmull_path([top, (top + w) / 2 + n * 0.015, w + n * 0.02], 6), 0.003, 6))
 
 
-def smoke_bomb(c, r, coll_mds):
+def smoke_bomb(c, r, coll_mds, turn=0):
     s = uv_sphere(r, 28, 18)
     s.translate(c)
     coll_mds["bomb"].add(s)
-    # profile from bottom to top so the kanji texture is upright (image v=0 is the bottom row)
-    d = lathe([(r * 1.012 * math.sin(math.pi * k / 18), -r * 1.012 * math.cos(math.pi * k / 18)) for k in range(19)], 32)
+    # profile from bottom to top so the kanji texture is upright (image v=0 is the bottom row);
+    # turned so one of the three kanji faces forward
+    d = lathe([(r * 1.012 * math.sin(math.pi * k / 18), -r * 1.012 * math.cos(math.pi * k / 18)) for k in range(19)], 48)
+    d.transform(Matrix.Rotation(-math.pi / 3 - turn * TAU / 3, 4, "Z"))
     # rotate so the texture seam is at the back
     d.translate(c)
     coll_mds["bomb_decal"].add(d)
@@ -522,9 +527,16 @@ def pouch_md(w=0.075, h=0.085, d=0.036):
     stud.v = [V((p.x, p.y * 0.6, p.z)) for p in stud.v]
     stud.translate((0, -d / 2 - 0.008, h / 2 - h * 0.55))
     metal.add(stud)
-    strap = box(0.012, 0.004, 0.03)
-    strap.translate((0, -d / 2 - 0.006, h / 2 - h * 0.5))
+    strap = box(0.014, 0.004, h * 0.75)
+    strap.translate((0, -d / 2 - 0.0065, h / 2 - h * 0.30))
     flap.add(strap)
+    bk = box(0.020, 0.003, 0.016)
+    bk.translate((0, -d / 2 - 0.009, h / 2 - h * 0.42))
+    metal.add(bk)
+    for sx in (-1, 1):
+        rv = uv_sphere(0.0028, 8, 5)
+        rv.translate((sx * (w / 2 - 0.008), -d / 2 - 0.006, h / 2 - 0.006))
+        metal.add(rv)
     return body, flap, metal
 
 
@@ -654,9 +666,9 @@ def build_gear(coll, root):
     place_gourd(deg(108), 0.80, 0.95, 0.090, mds, 0.08)
     place_gourd(deg(175), 0.735, 1.18, 0.105, mds, 0.0)
     # smoke bombs cluster (front right)
-    for th, z, r in ((-47, 0.905, 0.047), (-72, 0.975, 0.034), (-86, 0.945, 0.032)):
+    for k, (th, z, r) in enumerate(((-47, 0.905, 0.047), (-72, 0.975, 0.034), (-86, 0.945, 0.032))):
         c = body_pt(deg(th), z, 0.105 + r)
-        smoke_bomb(c, r, mds)
+        smoke_bomb(c, r, mds, turn=k)
         top = body_pt(deg(th), 1.085, 0.034)
         mds["cord"].add(tube(catmull_path([top, (top + c) / 2 + V((0, -0.01, 0.01)), c + V((0, 0, r * 1.25))], 6),
                              0.0028, 6))
@@ -710,6 +722,7 @@ def build_gear(coll, root):
         if k == "pouch":
             from kage_lib import mod_bevel
             mod_bevel(ob, 0.006, 3)
+            mod_subsurf(ob, 1, 2)
         if k == "pouch_flap":
             mod_solidify(ob, 0.003, -1.0)
             mod_subsurf(ob, 1, 2)
@@ -749,6 +762,8 @@ def build_back(coll, root):
     ob = to_obj("Back_Banner_Sashimono_Cloth", md, M["cloth_banner"], coll, parent=root)
     mod_solidify(ob, 0.003, 0.0)
     mod_subsurf(ob, 1, 2)
+    from kage_lib import mod_wrinkle
+    mod_wrinkle(ob, 0.004, 0.035)
     # rope coil (left back) + grappling hook tucked beside it
     th = deg(157)
     n = body_normal(th, 0.95)
@@ -775,8 +790,17 @@ def build_showcase_items(coll, origin):
     mds = {k: MD() for k in ("gourd", "gold", "cord", "bomb", "bomb_decal", "pouch", "pouch_flap", "leather_dark",
                              "flask_tassel", "flask_body", "steel", "grip", "iron", "rope")}
     # smoke bombs x3
+    tops = []
     for k in range(3):
-        smoke_bomb(o + V((-1.15 + k * 0.11, 0.0, 0.05)), 0.05, mds)
+        c = o + V((-1.15 + k * 0.11, 0.0, 0.05))
+        smoke_bomb(c, 0.05, mds, turn=k)
+        tops.append(c + V((0, 0, 0.05 * 1.38)))
+    knot_c = (tops[0] + tops[2]) / 2 + V((0, -0.01, 0.07))
+    for t_ in tops:
+        mds["cord"].add(tube(catmull_path([t_, (t_ + knot_c) / 2 + V((0, -0.006, 0.02)), knot_c], 6), 0.0026, 6))
+    mds["cord"].add(knot(knot_c, V((0, -1, 0)), 0.008, 0.0032))
+    mds["cord"].add(tube(catmull_path([knot_c, knot_c + V((0.03, -0.01, 0.03)), knot_c + V((0.06, -0.012, 0.0))], 6),
+                         0.0024, 6))
     # powder flask
     fl, metal, cord = powder_flask_md()
     m = Matrix.Translation(o + V((-0.78, 0, 0.01)))
@@ -823,6 +847,7 @@ def build_showcase_items(coll, origin):
         if k == "pouch":
             from kage_lib import mod_bevel
             mod_bevel(ob, 0.006, 3)
+            mod_subsurf(ob, 1, 2)
         if k == "pouch_flap":
             mod_solidify(ob, 0.003, -1.0)
             mod_subsurf(ob, 1, 2)

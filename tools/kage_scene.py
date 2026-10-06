@@ -21,11 +21,11 @@ TURN_FOCAL = 70
 DETAILS = {
     "FrontWaist": ((-0.02, -1.15, 1.10), (-0.02, -0.1, 1.00), 50),
     "BackWaist": ((0.04, 1.15, 1.02), (0.04, 0.1, 0.94), 50),
-    "Kasa": ((-0.42, -0.62, 1.93), (0.0, 0.0, 1.80), 50),
+    "Kasa": ((-0.40, -0.58, 2.08), (0.0, 0.0, 1.82), 50),
     "Mask": ((-0.18, -0.62, 1.74), (0.0, 0.0, 1.70), 50),
     "Armor": ((0.85, -0.25, 1.40), (0.30, 0.0, 1.40), 50),
     "Fabric": ((-0.07, 0.66, 1.26), (-0.075, 0.20, 1.24), 50),
-    "LegArmor": ((0.48, -0.78, 0.34), (0.24, -0.02, 0.24), 50),
+    "LegArmor": ((0.44, -0.66, 0.36), (0.22, -0.02, 0.30), 50),
 }
 
 
@@ -229,8 +229,8 @@ def mat_stone(name="Stone_Courtyard"):
     br.inputs["Bias"].default_value = 0.0
     br.inputs["Brick Width"].default_value = 0.95
     br.inputs["Row Height"].default_value = 0.62
-    br.inputs["Color1"].default_value = (0.085, 0.083, 0.082, 1)
-    br.inputs["Color2"].default_value = (0.060, 0.058, 0.058, 1)
+    br.inputs["Color1"].default_value = (0.062, 0.060, 0.060, 1)
+    br.inputs["Color2"].default_value = (0.043, 0.042, 0.042, 1)
     br.inputs["Mortar"].default_value = (0.0, 0.0, 0.0, 1)
     dn = nb.noise(obj, 4.0, 4, 0.5)
     warped = nb.n("ShaderNodeVectorMath", (-1100, 200))
