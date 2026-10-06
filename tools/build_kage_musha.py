@@ -28,6 +28,8 @@ def reset_scene():
     kage_lib._COLLS.clear()
     kage_lib._IMAGES.clear()
     kage_lib._MATS.clear()
+    kage_lib._WRINKLE_TEX.clear()
+    kage_lib._WRINKLE_SPACE.clear()
     return sc
 
 

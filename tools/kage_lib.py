@@ -140,9 +140,13 @@ class MD:
         self.f = []
         self.uv = []
         self.mi = []
+        self.hem = []  # optional per-vertex metres above the torn hem (drives the fray shader)
 
     def add(self, other, mi=None):
         off = len(self.v)
+        if other.hem or self.hem:
+            self.hem.extend([9.0] * (len(self.v) - len(self.hem)))
+            self.hem.extend(other.hem if other.hem else [9.0] * len(other.v))
         self.v.extend(other.v)
         self.f.extend([tuple(i + off for i in face) for face in other.f])
         self.uv.extend(other.uv)
@@ -168,6 +172,7 @@ class MD:
         o.f = list(self.f)
         o.uv = [list(u) for u in self.uv]
         o.mi = list(self.mi)
+        o.hem = list(self.hem)
         return o
 
     def displace(self, fn):
@@ -532,6 +537,9 @@ def to_obj(name, md, mats, coll, smooth=True, recalc=False, parent=None, auto_sm
     if md.mi:
         me.polygons.foreach_set("material_index", md.mi)
     me.polygons.foreach_set("use_smooth", [smooth] * len(me.polygons))
+    if md.hem and len(md.hem) == len(md.v):
+        a = me.attributes.new("hem1", "FLOAT", "POINT")
+        a.data.foreach_set("value", [h + 1.0 for h in md.hem])
     if not isinstance(mats, (list, tuple)):
         mats = [mats]
     for m in mats:
@@ -576,28 +584,83 @@ def mod_bevel(ob, w, segs=2, limit="ANGLE"):
 
 
 _WRINKLE_TEX = {}
+_WRINKLE_SPACE = {}
 
 
-def mod_wrinkle(ob, strength=0.003, size=0.025, kind="CLOUDS"):
-    """Geometric micro-wrinkles for cloth (displace along normals after subdivision)."""
-    key = (kind, size)
+def mod_wrinkle(ob, strength=0.003, size=0.025, kind="CLOUDS", stretch=(1.0, 1.0, 1.0), hard=False):
+    """Geometric cloth wrinkles: displace along normals.
+
+    hard=True uses |noise| valleys inverted into sharp fold ridges; stretch elongates the features
+    (e.g. (1, 1, 6) = long vertical gravity folds, (3, 3, 1) = horizontal tension wrinkles).
+    """
+    key = (kind, size, hard)
     tex = _WRINKLE_TEX.get(key)
     if tex is None:
-        tex = bpy.data.textures.new(f"Wrinkle_{kind}_{size}", kind)
+        tex = bpy.data.textures.new(f"Wrinkle_{kind}_{size}_{int(hard)}", kind)
         if kind == "CLOUDS":
             tex.noise_scale = size
-            tex.noise_depth = 2
-            tex.noise_basis = "BLENDER_ORIGINAL"
+            tex.noise_depth = 1 if hard else 2
+            tex.noise_type = "HARD_NOISE" if hard else "SOFT_NOISE"
+            tex.noise_basis = "IMPROVED_PERLIN"
         elif kind == "STUCCI":
             tex.noise_scale = size
             tex.turbulence = 6.0
         _WRINKLE_TEX[key] = tex
     m = ob.modifiers.new("Wrinkles", "DISPLACE")
     m.texture = tex
-    m.texture_coords = "GLOBAL"
-    m.strength = strength
-    m.mid_level = 0.5
+    st = tuple(float(x) for x in stretch)
+    if st != (1.0, 1.0, 1.0):
+        emp = _WRINKLE_SPACE.get(st)
+        if emp is None or emp.name not in bpy.data.objects:
+            emp = bpy.data.objects.new("WrinkleSpace_%.1f_%.1f_%.1f" % st, None)
+            bpy.context.scene.collection.objects.link(emp)
+            emp.scale = st
+            emp.hide_render = True
+            emp.hide_viewport = True
+            _WRINKLE_SPACE[st] = emp
+        m.texture_coords = "OBJECT"
+        m.texture_coords_object = emp
+    else:
+        m.texture_coords = "GLOBAL"
+    if hard:
+        m.mid_level, m.strength = 1.0, -strength
+    else:
+        m.mid_level, m.strength = 0.5, strength
     return m
+
+
+def cloth_mods(ob, sub=2, wrinkles=(), solid=0.0, offset=0.0):
+    """Cloth modifier stack in the right order: Subdivision -> Wrinkles -> Solidify."""
+    if sub:
+        mod_subsurf(ob, 1, sub)
+    for w in wrinkles:
+        mod_wrinkle(ob, *w[:2], **(w[2] if len(w) > 2 else {}))
+    if solid:
+        sm = mod_solidify(ob, solid, offset)
+        sm.use_even_offset = False  # even offset explodes into spikes on sharp displaced creases
+    return ob
+
+
+def torn_profile(n, depth, seed, deep=2, tongues=1):
+    """Per-column hem shortening (in units of the drop).  Neighbours are correlated (no sawtooth):
+    low + mid frequency raggedness, a few deep V-rips and optional streamers hanging below the hem."""
+    r = random.Random(1000 + int(seed))
+    out = []
+    for k in range(n + 1):
+        x = k / n
+        lo = 0.5 + 0.5 * fbm(V((x * 2.2, seed * 1.37, 0.3)))
+        mid = 0.5 + 0.5 * fbm(V((x * 8.0, seed * 1.37, 4.1)))
+        out.append(depth * (0.35 * lo + 0.30 * mid + 0.35 * r.random() ** 3))
+    for _ in range(deep):
+        c, w = r.randrange(1, n), r.randint(1, max(1, n // 12))
+        d = depth * r.uniform(1.6, 2.8)
+        for k in range(max(0, c - w), min(n, c + w) + 1):
+            out[k] = max(out[k], d * (1 - abs(k - c) / (w + 1)) ** 0.6)
+    for _ in range(tongues if n >= 10 else 0):
+        c = r.randrange(2, n - 2)
+        for k in (c - 1, c, c + 1):
+            out[k] = -depth * r.uniform(0.5, 0.9)
+    return out
 
 
 def mod_weighted_normals(ob):
@@ -947,78 +1010,142 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
     return m
 
 
-def mat_cloth(name, base=(0.012, 0.0115, 0.0115), print_img=None, print_scale=(1, 1), print_col=(0.30, 0.20, 0.09),
-              print_strength=0.7, mapping="UV", extension="REPEAT", fade=(0.026, 0.024, 0.023), dust=0.35,
-              sheen=0.18, weave=220.0, print_metal=0.25, fray=0.0):
+def _triplanar(nb, name, obj, scale, extension="REPEAT"):
+    """Sign-corrected triplanar lookup of a mask image, `scale` tiles per metre (no mirrored glyphs)."""
+    sp = nb.n("ShaderNodeSeparateXYZ", (-1300, 600))
+    nb.link(obj, sp.inputs[0])
+    g = nb.n("ShaderNodeNewGeometry", (-1300, 800))
+    sn = nb.n("ShaderNodeSeparateXYZ", (-1100, 800))
+    nb.link(g.outputs["Normal"], sn.inputs[0])
+    x, y, z = sp.outputs[0], sp.outputs[1], sp.outputs[2]
+    nx, ny, nz = sn.outputs[0], sn.outputs[1], sn.outputs[2]
+
+    def vec(u, v):
+        c = nb.n("ShaderNodeCombineXYZ", (-900, 600))
+        nb.link(nb.math("MULTIPLY", u, scale), c.inputs[0])
+        nb.link(nb.math("MULTIPLY", v, scale), c.inputs[1])
+        return c.outputs[0]
+
+    ix = nb.img(name, vec(nb.math("MULTIPLY", y, nb.math("SIGN", nx)), z), extension).outputs["Color"]
+    iy = nb.img(name, vec(nb.math("MULTIPLY", x, nb.math("MULTIPLY", nb.math("SIGN", ny), -1.0)), z),
+                extension).outputs["Color"]
+    iz = nb.img(name, vec(x, y), extension).outputs["Color"]
+    wx, wy, wz = (nb.math("POWER", nb.math("ABSOLUTE", n_), 4.0) for n_ in (nx, ny, nz))
+    acc = nb.math("ADD", nb.math("ADD", nb.math("MULTIPLY", ix, wx), nb.math("MULTIPLY", iy, wy)),
+                  nb.math("MULTIPLY", iz, wz))
+    return nb.math("DIVIDE", acc, nb.math("ADD", nb.math("ADD", wx, wy), nb.math("ADD", wz, 1e-4)))
+
+
+def mat_cloth(name, base=(0.020, 0.018, 0.017), print_img=None, print_scale=(1, 1), print_col=(0.34, 0.23, 0.11),
+              print_strength=0.7, mapping="UV", extension="REPEAT", fade=(0.050, 0.043, 0.037), dust=0.35,
+              sheen=0.75, weave=210.0, print_metal=0.0, fray=0.0, rot=0.0, sheen_tint=(0.55, 0.50, 0.45),
+              folds=1.0):
+    """Heavy, worn, dusty cotton/hemp.
+
+    mapping: "UV" (artwork panels, CLIP) or "TRI" (scattered prints, print_scale[0] tiles per metre).
+    fray: height in metres of the frayed band above the torn hem (needs the mesh 'hem1' attribute).
+    rot: fraction of the panel (uv v from the bottom) that is bleached / rotted.
+    """
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
     n1 = nb.noise(obj, 4.0, 8, 0.65)
     col = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.35, 0.0), (0.75, 1.0)]), base, fade)
-    # dust toward the bottom (object z) + noise
     sep = nb.n("ShaderNodeSeparateXYZ", (-1000, -400))
-    nb.link(tc.outputs["Object"], sep.inputs[0])
+    nb.link(obj, sep.inputs[0])
     n2 = nb.noise(obj, 14.0, 6, 0.6)
     dmask = nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.5, 0.0), (0.85, 1.0)]), dust)
     col = nb.mix(dmask, col, (0.11, 0.09, 0.075))
-    rough = 0.88
+    # rubbed, lighter fold crests
+    cn = nb.noise(obj, 18.0, 4, 0.6)
+    crest = nb.math("MULTIPLY", _edges(nb, 0.50, 0.525), nb.ramp(cn.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", crest, 0.55), col, (0.080, 0.070, 0.060))
+    rough = 0.90
     metal = 0.0
+    rm = None
+    if rot > 0:
+        su = nb.n("ShaderNodeSeparateXYZ", (-1000, -200))
+        nb.link(tc.outputs["UV"], su.inputs[0])
+        rm = nb.math("MULTIPLY", nb.ramp(su.outputs[1], [(0.0, 1.0), (rot, 0.0)]),
+                     nb.ramp(nb.noise(obj, 7.0, 6, 0.65).outputs["Fac"], [(0.3, 0.25), (0.65, 1.0)]))
+        col = nb.mix(nb.math("MULTIPLY", rm, 0.85), col, (0.105, 0.082, 0.058))
+    pmask = None
     if print_img:
-        vec = tc.outputs["UV"] if mapping == "UV" else tc.outputs[mapping]
-        vec = nb.mapping(vec, (print_scale[0], print_scale[1], 1))
-        it = nb.img(print_img, vec, extension, proj="BOX" if mapping != "UV" else "FLAT")
+        if mapping == "TRI":
+            ptex = _triplanar(nb, print_img, obj, print_scale[0], extension)
+        else:
+            vec = tc.outputs["UV"] if mapping == "UV" else tc.outputs[mapping]
+            vec = nb.mapping(vec, (print_scale[0], print_scale[1], 1))
+            ptex = nb.img(print_img, vec, extension).outputs["Color"]
         pn = nb.noise(obj, 30.0, 5, 0.6)
-        pmask = nb.math("MULTIPLY", it.outputs["Color"],
-                        nb.ramp(pn.outputs["Fac"], [(0.3, 0.35), (0.65, 1.0)]))
+        pmask = nb.math("MULTIPLY", ptex, nb.ramp(pn.outputs["Fac"], [(0.25, 0.15), (0.70, 1.0)]))
+        vor = nb.n("ShaderNodeTexVoronoi", (-900, -1500), feature="DISTANCE_TO_EDGE")
+        vor.inputs["Scale"].default_value = 140.0
+        nb.link(obj, vor.inputs["Vector"])
+        pmask = nb.math("MULTIPLY", pmask, nb.ramp(vor.outputs["Distance"], [(0.0, 0.0), (0.05, 1.0)]))  # crackle
+        sp_ = nb.noise(obj, 420.0, 2, 0.5)
+        pmask = nb.math("MULTIPLY", pmask, nb.ramp(sp_.outputs["Fac"], [(0.56, 1.0), (0.64, 0.0)]))      # flakes
+        pmask = nb.math("MULTIPLY", pmask, nb.math("SUBTRACT", 1.0, nb.math("MULTIPLY", crest, 0.65)))  # rubbed off
+        if rm is not None:
+            pmask = nb.math("MULTIPLY", pmask, nb.math("SUBTRACT", 1.0, nb.math("MULTIPLY", rm, 0.7)))
         pmask = nb.math("MULTIPLY", pmask, print_strength, clamp_=True)
         col = nb.mix(pmask, col, print_col)
-        rough = nb.mixf(pmask, 0.88, 0.55)
+        rough = nb.mixf(pmask, 0.90, 0.74)
         metal = nb.mixf(pmask, 0.0, print_metal)
     # faded / sun-bleached patches
     fp = nb.noise(obj, 1.8, 5, 0.6)
     col = nb.mix(nb.math("MULTIPLY", nb.ramp(fp.outputs["Fac"], [(0.55, 0.0), (0.75, 1.0)]), 0.6), col,
-                 (0.045, 0.034, 0.028))
-    # realism: deep shadow in folds (AO), dust on the lower hems and upward faces
+                 (0.055, 0.045, 0.038))
+    # deep shadow in folds (AO), dust on the lower hems and upward faces
     ao = _ao(nb, 0.05)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.004, 0.0035, 0.003))
     low = nb.ramp(sep.outputs[2], [(0.15, 1.0), (0.75, 0.0)])
     hem = nb.math("MULTIPLY", low, nb.ramp(nb.noise(obj, 6.0, 6, 0.6).outputs["Fac"], [(0.3, 0.2), (0.7, 1.0)]))
     col = nb.mix(nb.math("MULTIPLY", hem, dust * 0.9), col, (0.12, 0.10, 0.082))
     col = nb.mix(nb.math("MULTIPLY", _updust(nb, obj, 8.0), dust * 0.8), col, (0.11, 0.095, 0.08))
-    # plain-weave threads (crosshatch) + slub noise
-    wx = nb.n("ShaderNodeTexWave", (-900, -600), wave_type="BANDS", bands_direction="X")
-    wx.inputs["Scale"].default_value = 520.0
-    wx.inputs["Distortion"].default_value = 0.6
-    nb.link(obj, wx.inputs["Vector"])
-    wy = nb.n("ShaderNodeTexWave", (-900, -800), wave_type="BANDS", bands_direction="Z")
-    wy.inputs["Scale"].default_value = 520.0
-    wy.inputs["Distortion"].default_value = 0.6
-    nb.link(obj, wy.inputs["Vector"])
+    # weave visible from every orientation: three band waves weighted by |normal|
+    wv = {}
+    for d in ("X", "Y", "Z"):
+        w = nb.n("ShaderNodeTexWave", (-900, -600), wave_type="BANDS", bands_direction=d)
+        w.inputs["Scale"].default_value = weave
+        w.inputs["Distortion"].default_value = 0.8
+        nb.link(obj, w.inputs["Vector"])
+        wv[d] = w.outputs["Fac"]
+    gn = nb.n("ShaderNodeNewGeometry", (-1100, -700))
+    sn = nb.n("ShaderNodeSeparateXYZ", (-950, -700))
+    nb.link(gn.outputs["Normal"], sn.inputs[0])
+    ax_, ay_, az_ = (nb.math("ABSOLUTE", sn.outputs[k]) for k in range(3))
+    weave_h = nb.math("ADD", nb.math("ADD", nb.math("MULTIPLY", ax_, nb.math("MULTIPLY", wv["Y"], wv["Z"])),
+                                     nb.math("MULTIPLY", ay_, nb.math("MULTIPLY", wv["X"], wv["Z"]))),
+                      nb.math("MULTIPLY", az_, nb.math("MULTIPLY", wv["X"], wv["Y"])))
     n3 = nb.noise(obj, 160.0, 3, 0.5)
-    h = nb.math("ADD", nb.math("MULTIPLY", nb.math("MULTIPLY", wx.outputs["Fac"], wy.outputs["Fac"]), 0.6),
-                nb.math("MULTIPLY", n3.outputs["Fac"], 0.5))
-    fold = nb.noise(obj, 25.0, 4, 0.5)
-    h = nb.math("ADD", h, nb.math("MULTIPLY", fold.outputs["Fac"], 1.5))
-    bmp = nb.bump(h, 0.30, 0.0006)
-    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=0.10,
-                      Sheen_Roughness=0.55, Sheen_Tint=(0.40, 0.37, 0.35), Specular_IOR_Level=0.22, Normal=bmp)
-    shader = p.outputs[0]
+    h = nb.math("ADD", nb.math("MULTIPLY", weave_h, 0.22), nb.math("MULTIPLY", n3.outputs["Fac"], 0.4))
+    # vertical stress lines + sharp creases (anisotropic)
+    fold = nb.noise(nb.mapping(obj, (1.0, 1.0, 0.2)), 30.0, 4, 0.55)
+    h = nb.math("ADD", h, nb.math("MULTIPLY", fold.outputs["Fac"], 0.6 * folds))
+    cz = nb.noise(nb.mapping(obj, (1.0, 1.0, 0.25)), 45.0, 3, 0.5)
+    h = nb.math("SUBTRACT", h, nb.math("MULTIPLY", nb.ramp(cz.outputs["Fac"], [(0.47, 0.0), (0.5, 1.0), (0.53, 0.0)]),
+                                       0.5 * folds))
+    if pmask is not None:
+        h = nb.math("ADD", h, nb.math("MULTIPLY", pmask, 0.35))  # raised pigment
+    edge = None
     if fray > 0:
-        # frayed hem: loose vertical threads and holes near uv v = 0 (the bottom edge of hanging panels)
-        sepu = nb.n("ShaderNodeSeparateXYZ", (-1000, -1400))
-        nb.link(tc.outputs["UV"], sepu.inputs[0])
-        thr = nb.noise(nb.mapping(tc.outputs["UV"], (420.0, 6.0, 1.0)), 1.0, 2, 0.5)
-        holes = nb.noise(obj, 22.0, 4, 0.6)
-        depth = nb.n("ShaderNodeMapRange", (-600, -1400))
-        nb.link(sepu.outputs[1], depth.inputs["Value"])
-        depth.inputs["From Min"].default_value = 0.0
-        depth.inputs["From Max"].default_value = fray
-        depth.inputs["To Min"].default_value = 0.70
-        depth.inputs["To Max"].default_value = 0.0
-        cut = nb.math("ADD", nb.math("MULTIPLY", thr.outputs["Fac"], 0.8),
-                      nb.math("MULTIPLY", holes.outputs["Fac"], 0.35))
-        alpha = nb.math("GREATER_THAN", cut, nb.math("ADD", depth.outputs[0], 0.18))
+        at = nb.n("ShaderNodeAttribute", (-1000, -1400))
+        at.attribute_name = "hem1"
+        present = nb.math("GREATER_THAN", at.outputs["Fac"], 0.5)
+        dist = nb.math("SUBTRACT", at.outputs["Fac"], 1.0)
+        edge = nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, nb.math("DIVIDE", dist, fray), clamp_=True), present)
+        col = nb.mix(nb.math("MULTIPLY", edge, 0.8), col, (0.060, 0.050, 0.040))  # faded fibre ends
+    bmp = nb.bump(h, 0.35, 0.0006)
+    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=sheen, Sheen_Roughness=0.35,
+                      Sheen_Tint=sheen_tint, Specular_IOR_Level=0.22, Normal=bmp)
+    shader = p.outputs[0]
+    if edge is not None:
+        thr = nb.noise(nb.mapping(obj, (700.0, 700.0, 18.0)), 1.0, 2, 0.5)  # vertical threads ~1.4 mm wide
+        hl = nb.noise(obj, 60.0, 3, 0.6)
+        cut = nb.math("ADD", nb.math("MULTIPLY", thr.outputs["Fac"], 0.75), nb.math("MULTIPLY", hl.outputs["Fac"], 0.25))
+        alpha = nb.math("GREATER_THAN", cut, nb.math("ADD", nb.math("MULTIPLY", edge, 0.55), 0.12))
         tr = nb.n("ShaderNodeBsdfTransparent", (200, -400))
         mx = nb.n("ShaderNodeMixShader", (450, 0))
         nb.link(alpha, mx.inputs[0])

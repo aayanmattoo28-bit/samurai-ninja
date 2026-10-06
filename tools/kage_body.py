@@ -3,7 +3,7 @@ import math
 
 from mathutils import Matrix, Vector
 
-from kage_lib import (MD, TAU, V, mod_wrinkle, ang, catmull_path, clamp, fbm, grid, interp_smooth, lathe, lin, look_matrix,
+from kage_lib import (MD, TAU, V, mod_wrinkle, cloth_mods, torn_profile, ang, catmull_path, clamp, fbm, grid, interp_smooth, lathe, lin, look_matrix,
                       mod_solidify, mod_subsurf, nz, sweep, to_obj, torus_md, tube, uv_sphere, smooth, lerp,
                       RNG, circle_profile, rect_profile)
 from kage_mats import M
@@ -206,8 +206,16 @@ def build_head(coll, parent):
         p.y -= 0.006 * front ** 4 * math.exp(-((z - 1.640) / 0.02) ** 2)
         n = V((math.sin(th), -math.cos(th), 0))
         w = 0.0030 * math.sin(z * 240.0 + abs(math.sin(th)) * 40) * front ** 2 * clamp((1.733 - z) / 0.04)
-        w += 0.0025 * math.sin(z * 150.0 - abs(math.sin(th)) * 25 + th) * (1 - front) * clamp((1.80 - z) / 0.1)
-        w += 0.0035 * fbm(p * 18) + 0.0018 * fbm(p * 55 + V((3, 1, 0)))
+        w += 0.002 * fbm(V((p.x * 6, p.y * 6, p.z * 40)))
+        if v <= A and front > 0.3:  # tension folds radiating from the nose bridge
+            dz = z - 1.738
+            dx = math.sin(th) * 0.09
+            rr = math.hypot(dx, dz)
+            phi = math.atan2(dz, abs(dx) + 1e-4)
+            w += 0.0022 * math.sin(phi * 7 + 0.8) * smooth((rr - 0.015) / 0.03) * smooth((0.11 - rr) / 0.04) * front ** 2
+        # hood gathered into vertical drape folds at the back of the head
+        w += 0.005 * (1 - front) ** 1.5 * math.sin(th * 9 + 1.5 * fbm(V((math.cos(th), math.sin(th), z * 4)))) * \
+            smooth((1.84 - z) / 0.12) * smooth((z - 1.58) / 0.06)
         # rolled cloth edges around the opening (mask top edge + hood front edge)
         if front > 0.5:
             k = (front - 0.5) / 0.5
@@ -215,7 +223,7 @@ def build_head(coll, parent):
             w += 0.0050 * k * math.exp(-((z - hi - 0.003) / 0.005) ** 2)
         return p + n * w
 
-    us = lin(0, TAU, 96)
+    us = lin(0, TAU, 128)
     vs = lin(0.0, A, 26) + lin(A, B, 2)[1:] + lin(B, 1.0, 26)[1:]
     band_rows = set(range(26, 28))
 
@@ -238,9 +246,7 @@ def build_head(coll, parent):
         nrm = V((math.sin(th), -math.cos(th), 0))
         return p + nrm * 0.0065
     to_obj("Mask_Embroidery", grid(emb, lin(0, 1, 8), lin(0, 1, 8)), M["decal_mask_flower"], coll, parent=parent)
-    mod_solidify(hood, 0.005, 1.0)
-    mod_subsurf(hood, 1, 2)
-    mod_wrinkle(hood, 0.0025, 0.012)
+    cloth_mods(hood, 3, [(0.0018, 0.010, {"stretch": (8, 8, 1)})], 0.005, 1.0)
 
     # scarf / cowl: one wrapped surface with diagonal rolls and creases
     scarf = MD()
@@ -256,16 +262,46 @@ def build_head(coll, parent):
         radial = V((math.sin(th), -math.cos(th), 0))
         shift = 0.38 * math.sin(th) + 0.14 * math.sin(2 * th + 0.5)
         s_ = v * 3.3 + shift
-        roll = 0.028 * (0.5 - 0.5 * math.cos(TAU * s_)) ** 0.7 * (0.40 + 0.60 * v)
-        s2 = v * 6.1 - 0.9 * math.sin(th * 1.5 + 0.7)
-        roll += 0.008 * (0.5 - 0.5 * math.cos(TAU * s2)) ** 1.5 * v
-        crease = 0.005 * math.sin(th * 5 + v * 9) * v + 0.002 * math.sin(th * 13 - v * 11)
+        roll = 0.012 * (0.5 - 0.5 * math.cos(TAU * s_)) ** 0.7 * (0.40 + 0.60 * v)
+        crease = 0.004 * math.sin(th * 5 + v * 9) * v + 0.0015 * math.sin(th * 13 - v * 11)
         p = V((x, y, z))
-        p += radial * (roll + crease + 0.006 * fbm(p * 14) + 0.0025 * fbm(p * 48 + V((5, 0, 2))))
+        p += radial * (roll + crease + 0.002 * fbm(V((p.x * 6, p.y * 6, p.z * 30))))
         p.z += 0.006 * math.sin(th * 5 + v * 4)
         return p
 
     scarf.add(grid(cowl, lin(0, TAU, 96), lin(0, 1, 30), closed_u=True))
+
+    # four separate thick wraps rolled around the neck, overlapping, with dark gaps between them
+    def neck_base(th, z):
+        return torso_pt(th, z, 0.0, HOOD, 2.0) if z >= 1.56 else torso_pt(th, z, 0.030)
+
+    wraps = MD()
+    # (z at back, z at front, band width, thickness, extra offset, half twists, phase, side tilt)
+    WRAPS = ((1.656, 1.622, 0.042, 0.016, 0.006, 0, 0.0, 0.012), (1.618, 1.574, 0.050, 0.019, 0.010, 1, 1.1, -0.016),
+             (1.582, 1.530, 0.054, 0.021, 0.013, 0, 2.3, 0.018), (1.548, 1.492, 0.058, 0.018, 0.017, 1, 0.6, -0.010))
+    for zb_, zf_, bw, thk, ex, half_turns, ph, tilt in WRAPS:
+        pts, ups = [], []
+        for k in range(144):
+            th = TAU * k / 144
+            front = 0.5 + 0.5 * math.cos(th)
+            # diagonal, sagging wraps: tilted sideways, drooping into a loose fold at the front
+            z = lerp(zb_, zf_, front ** 1.5) + tilt * math.sin(th) + 0.006 * math.sin(2 * th + ph) + \
+                0.004 * fbm(V((math.cos(th) * 2, math.sin(th) * 2, ph))) - 0.012 * math.exp(-((th - math.pi * 2 * (th > math.pi)) / 0.5) ** 2)
+            rad = V((math.sin(th), -math.cos(th), 0.0))
+            base_r = neck_base(th, z)
+            cow = cowl(th, clamp((1.662 - z) / 0.186), 0, 0)
+            outer = max(V((base_r.x, base_r.y, 0)).length, V((cow.x, cow.y, 0)).length)
+            pts.append(V((rad.x * outer, rad.y * outer, z)) + rad * (thk * 0.5 + ex))
+            ups.append(rad + V((0, 0, 0.35)))
+        prof = [(0.5 * bw * math.cos(a), 0.5 * thk * math.sin(a)) for a in lin(0, TAU, 16)]
+
+        def sc(t, ph=ph):
+            c, s_ = math.cos(TAU * t), math.sin(TAU * t)
+            return (0.82 + 0.14 * math.sin(TAU * 5 * t + ph) + 0.06 * fbm(V((c * 1.5, s_ * 1.5, ph))),
+                    0.80 + 0.40 * max(0.0, math.sin(TAU * 3 * t + 2 * ph)))
+
+        wraps.add(sweep(pts, prof, up=lambda i, p, ups=ups: ups[i], closed_path=True, scale=sc,
+                        twist=math.pi * half_turns))
     # front V drape tucked into the cuirass
     def drape(u, v, i, j):
         x = lerp(-0.075, 0.075, u)
@@ -278,9 +314,9 @@ def build_head(coll, parent):
 
     scarf.add(grid(drape, lin(0, 1, 16), lin(0, 1, 8)))
     sc = to_obj("Neck_Scarf", scarf, M["cloth_hood"], coll, parent=parent)
-    mod_solidify(sc, 0.004, -1.0)
-    mod_subsurf(sc, 1, 2)
-    mod_wrinkle(sc, 0.006, 0.02)
+    cloth_mods(sc, 2, [(0.003, 0.014, {"stretch": (8, 8, 1)})], 0.004, -1.0)
+    wo = to_obj("Neck_Scarf_Wraps", wraps, M["cloth_hood"], coll, parent=parent)
+    cloth_mods(wo, 2, [(0.0025, 0.012, {"stretch": (8, 8, 1)})])
 
     # shawl / capelet over the shoulders & upper back (tattered hem)
     rng = RNG
@@ -289,7 +325,8 @@ def build_head(coll, parent):
         b = 0.5 - 0.5 * math.cos(th)  # 0 front, 1 back
         return lerp(1.475, 1.410, b ** 1.2)
 
-    ragged = [rng.uniform(0.0, 0.03) for _ in range(97)]
+    ragged = torn_profile(96, 0.03, 9, deep=4, tongues=2)
+    SF = [(rng.uniform(0, TAU), rng.uniform(0.06, 0.12), rng.choice((-1, 1)) * rng.uniform(0.6, 1.0)) for _ in range(14)]
 
     def shawl(u, v, i, j):
         th = u
@@ -298,15 +335,14 @@ def build_head(coll, parent):
         off = lerp(0.010, 0.030, v)
         p = torso_pt(th, z, off)
         radial = V((math.sin(th), -math.cos(th), 0))
-        fold = 0.012 * math.sin(th * 9 + 0.6) * v + 0.008 * math.sin(th * 17) * v ** 2
-        p += radial * (fold + 0.004 * fbm(p * 15) + 0.002 * fbm(p * 50))
+        fold = 0.014 * v ** 1.2 * sum(a_ * math.exp(-(math.atan2(math.sin(th - c_), math.cos(th - c_)) / w_) ** 2)
+                                      for c_, w_, a_ in SF)
+        p += radial * (fold + 0.003 * fbm(V((p.x * 15, p.y * 15, p.z * 3))))
         return p
 
     md = grid(shawl, lin(0, TAU, 96), lin(0, 1, 14), closed_u=True)
     sh = to_obj("Shawl_Cowl", md, M["cloth_hood"], coll, parent=parent)
-    mod_solidify(sh, 0.004, 1.0)
-    mod_subsurf(sh, 1, 2)
-    mod_wrinkle(sh, 0.005, 0.025)
+    cloth_mods(sh, 2, [(0.0045, 0.018, {"stretch": (1, 1, 3), "hard": True})], 0.004, 1.0)
 
 
 # -----------------------------------------------------------------------------

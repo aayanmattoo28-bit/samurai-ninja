@@ -29,8 +29,8 @@ def build_materials():
                                           wear=0.5, relief=0.2, gold_tint=(0.55, 0.37, 0.15))
     M["lacquer_bracer"] = mat_lacquer("Lacquer_Bracer", "bracer_panel.png", extension="CLIP", wear=0.25,
                                       gold_tint=(0.66, 0.45, 0.19))
-    M["cloth_sleeve"] = mat_cloth("Cloth_Sleeve", print_img="cloth_print.png", print_scale=(2.0, 1.2),
-                                  print_strength=0.6, print_col=(0.30, 0.19, 0.09), dust=0.2)
+    M["cloth_sleeve"] = mat_cloth("Cloth_Sleeve", print_img="cloth_print.png", mapping="TRI", print_scale=(3.0, 3.0),
+                                  print_strength=0.6, print_col=(0.32, 0.21, 0.10), dust=0.2)
     M["lacquer_suneate"] = mat_lacquer("Lacquer_Suneate", "suneate_panel.png", extension="CLIP", wear=0.3,
                                        gold_tint=(0.62, 0.42, 0.18))
     M["mail"] = mat_mail("Chainmail_Iron")
@@ -39,28 +39,35 @@ def build_materials():
     M["lacquer_saya"] = mat_lacquer("Lacquer_Saya", "filigree_sparse.png", uv_scale=(1.0, 2.6), wear=0.35,
                                     relief=0.15, dust=0.12, gold_tint=(0.62, 0.42, 0.18))
     # --- cloth ----------------------------------------------------------------
-    M["cloth"] = mat_cloth("Cloth_Black", print_img="cloth_print_sparse.png", print_scale=(2, 2), print_strength=0.55,
-                         print_col=(0.26, 0.17, 0.08))
+    M["cloth"] = mat_cloth("Cloth_Black", print_img="cloth_print_sparse.png", mapping="TRI", print_scale=(2.2, 2.2),
+                           print_strength=0.55, print_col=(0.30, 0.20, 0.09))
     M["cloth_plain"] = mat_cloth("Cloth_Black_Plain")
-    M["cloth_hood"] = mat_cloth("Cloth_Hood", base=(0.011, 0.0105, 0.011), fade=(0.024, 0.022, 0.022), dust=0.10,
-                                print_img="cloth_print_sparse.png", print_scale=(3, 3),
-                                print_strength=0.4, print_col=(0.26, 0.17, 0.08))
-    M["cloth_print"] = mat_cloth("Cloth_Gold_Print", print_img="cloth_print.png", print_scale=(1.6, 2.2),
-                                 print_strength=1.0, print_col=(0.42, 0.28, 0.12))
-    M["cloth_skirt"] = mat_cloth("Cloth_Skirt", print_img="cloth_print.png", print_scale=(2.0, 1.5),
-                                 print_strength=0.55, dust=0.28, print_col=(0.26, 0.17, 0.08), fray=0.07)
+    M["cloth_hood"] = mat_cloth("Cloth_Hood", base=(0.017, 0.016, 0.016), fade=(0.040, 0.035, 0.032), dust=0.10,
+                                sheen=0.85, folds=0.15, print_img="cloth_print_sparse.png", mapping="TRI", print_scale=(3.5, 3.5),
+                                print_strength=0.45, print_col=(0.30, 0.20, 0.09))
+    M["cloth_print"] = mat_cloth("Cloth_Gold_Print", print_img="cloth_print.png", mapping="TRI", print_scale=(2.2, 2.2),
+                                 print_strength=1.0, print_col=(0.40, 0.27, 0.12))
+    M["cloth_skirt"] = mat_cloth("Cloth_Skirt", print_img="cloth_print.png", mapping="TRI", print_scale=(2.2, 2.2),
+                                 print_strength=0.65, dust=0.30, print_col=(0.32, 0.21, 0.10), fray=0.045)
+    M["cloth_skirt_under"] = mat_cloth("Cloth_Skirt_Under", base=(0.016, 0.015, 0.014), print_img="cloth_print_sparse.png",
+                                       mapping="TRI", print_scale=(2.2, 2.2), print_strength=0.3, dust=0.45, fray=0.045)
+    M["cloth_skirt_top"] = mat_cloth("Cloth_Skirt_Top", print_img="cloth_print_dense.png", mapping="TRI",
+                                     print_scale=(2.0, 2.0), print_strength=0.95, print_col=(0.36, 0.25, 0.12), dust=0.35,
+                                     fray=0.045)
     M["cloth_apron"] = mat_cloth("Cloth_Apron", print_img="apron_print.png", print_scale=(1, 1),
-                                 extension="CLIP", print_strength=0.8, print_col=(0.34, 0.23, 0.11), fray=0.07)
+                                 extension="CLIP", print_strength=0.85, print_col=(0.36, 0.25, 0.12), fray=0.045)
     M["cloth_panel"] = mat_cloth("Cloth_Panel_Gold", print_img="panel_print.png", print_scale=(1, 1),
-                                 extension="CLIP", print_strength=1.0, print_col=(0.46, 0.31, 0.13), fray=0.07)
+                                 extension="CLIP", print_strength=1.0, print_col=(0.40, 0.28, 0.14), fray=0.045)
     M["cloth_banner"] = mat_cloth("Cloth_Banner", print_img="banner_print.png", print_scale=(1, 1),
-                                  extension="CLIP", print_strength=1.0, print_col=(0.56, 0.39, 0.17), fray=0.07)
-    M["cloth_pants"] = mat_cloth("Cloth_Pants", print_img="cloth_print_sparse.png", print_scale=(3, 3),
-                                 print_strength=0.5, dust=0.25, print_col=(0.30, 0.20, 0.09))
-    M["cloth_red"] = mat_cloth("Cloth_Crimson", base=(0.08, 0.008, 0.008), fade=(0.14, 0.02, 0.017),
-                               print_img="cloth_print_sparse.png", print_scale=(2, 2), print_strength=0.3,
-                               print_col=(0.40, 0.22, 0.09), fray=0.07)
-    M["obi"] = mat_cloth("Cloth_Obi", base=(0.05, 0.010, 0.010), fade=(0.09, 0.02, 0.017), dust=0.2, weave=400)
+                                  extension="CLIP", print_strength=1.0, print_col=(0.44, 0.31, 0.16), fray=0.04, rot=0.16)
+    M["cloth_pants"] = mat_cloth("Cloth_Pants", print_img="cloth_print_sparse.png", mapping="TRI", print_scale=(2.5, 2.5),
+                                 print_strength=0.5, dust=0.40, print_col=(0.30, 0.20, 0.09))
+    M["cloth_red"] = mat_cloth("Cloth_Crimson", base=(0.085, 0.014, 0.011), fade=(0.17, 0.05, 0.035), dust=0.45,
+                               mapping="TRI", print_img="cloth_print_sparse.png", print_scale=(3, 3), print_strength=0.3,
+                               print_col=(0.40, 0.22, 0.09), sheen_tint=(0.65, 0.32, 0.28), fray=0.045)
+    M["obi"] = mat_cloth("Cloth_Obi", base=(0.05, 0.010, 0.010), fade=(0.09, 0.02, 0.017), dust=0.2, weave=400,
+                         sheen_tint=(0.6, 0.3, 0.28))
+    M["cloth_thread"] = mat_simple("Cloth_Thread", (0.030, 0.026, 0.022), rough=0.9, sheen=0.5)
     # --- cords / leather / organics ------------------------------------------
     M["cord_red"] = mat_simple("Cord_Red", (0.15, 0.010, 0.009), rough=0.62, sheen=0.12, var_col=(0.18, 0.012, 0.01),
                                wave="BANDS", wave_scale=60.0, wave_str=0.8, bump_str=0.5)

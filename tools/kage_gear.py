@@ -1,12 +1,14 @@
 """Waist (obi, belts, red cords), skirts (kusazuri, apron, tattered skirt, red strips), swords, belt gear,
 back banner, rope coil + grappling hook, kunai, and the props-showcase layout."""
 import math
+import random
 
 from mathutils import Matrix, Vector
 
 from kage_armor import bow_knot, cui_pt, hang_cord, knot, tassel, both, deg, rivets_along
 from kage_body import CUIRASS, HIPS, hip_normal, hip_pt, torso_normal, torso_pt
-from kage_lib import (MD, RNG, TAU, V, box, catmull_path, circle_profile, clamp, fbm, frame_matrix, frames_along,
+from kage_lib import (MD, RNG, TAU, V, box, catmull_path, circle_profile, clamp, cloth_mods, fbm, frame_matrix,
+                      frames_along, torn_profile,
                       grid, interp_smooth, lathe, lerp, limb, lin, look_matrix, mod_solidify, mod_subsurf,
                       rect_profile, resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere)
 from kage_mats import M
@@ -176,42 +178,80 @@ def tatter_lengths(n, base=1.0, var=0.25, cut_prob=0.25, seed=None):
 
 
 def hanging_panel(th0, th1, z_top, z_bot_fn, off_fn, nu=24, nv=24, pleat=0.008, pleats=6, tatter=0.18,
-                  tatter_var=0.35, seed=0, slits=0.25):
-    """Cloth panel hanging around the hips from z_top down to z_bot_fn(theta) with a tattered hem.
+                  tatter_var=0.35, seed=0, slits=0.25, strips=0, split=0.35, holes=0, threads=None):
+    """Heavy cloth panel hanging around the hips from z_top down to z_bot_fn(theta), with a torn hem.
 
-    tatter: fraction of the drop that the ragged hem may shorten a column by.
-    UV: u across (0..1), v bottom(0) -> top(1).
+    tatter: hem raggedness in units of the drop.  strips: number of vertical splits near the hem (the
+    tongues swing apart).  holes: torn holes above the hem.  threads: MD collecting loose hem threads.
+    UV: u across (0..1), v bottom(0) -> top(1).  Stores per-vertex metres above the hem in md.hem.
     """
-    rng = RNG
-    lens = []
-    for k in range(nu + 1):
-        L = 1.0 - rng.random() * tatter * tatter_var
-        if rng.random() < slits:
-            L -= rng.uniform(0.3, 1.0) * tatter
-        lens.append(L)
+    r = random.Random(77 + int(seed * 7))
+    tear = torn_profile(nu, tatter * 0.5, seed, deep=1 + int(slits * 4))
+    edges = sorted(r.sample(range(2, nu - 2), min(strips, max(0, nu - 4)))) if strips else []
+    sw = [(r.uniform(-1, 1), r.uniform(-1, 1)) for _ in range(len(edges) + 1)]
+    hole_list = [(r.uniform(0.15, 0.85), r.uniform(0.5, 0.85), r.uniform(0.05, 0.10), r.uniform(0.02, 0.045))
+                 for _ in range(holes)]
+    folds = [(r.uniform(0, 1), r.uniform(0.05, 0.14), r.uniform(0.6, 1.0) * (1 if k % 2 else -1))
+             for k in range(max(2, pleats * 2))]
+
+    def fold_off(u, vv):
+        f = 0.0
+        for uc, w, a_ in folds:
+            uc2 = uc + 0.025 * math.sin(vv * 5.0 + uc * 9.0)  # folds wander down the panel
+            f += a_ * math.exp(-((u - uc2) / (w * (0.55 + 0.7 * vv))) ** 2)
+        return f
+
+    v0 = 0.62
 
     def fn(u, v, i, j):
         th = lerp(th0, th1, u)
         drop = z_top - z_bot_fn(th)
-        k = (lens[i] - 0.7) / 0.3
-        vv = v if v < 0.7 else 0.7 + (v - 0.7) * k
+        L = 1.0 - tear[i]
+        vv = v if v < v0 else v0 + (v - v0) * (L - v0) / (1 - v0)
         z = z_top - drop * vv
         p = body_pt(th, z, off_fn(th, z, vv))
         n = body_normal(th, max(z, 0.25))
         n = V((n.x, n.y, 0)).normalized()
-        p += n * (pleat * math.sin(u * pleats * TAU) * clamp(vv * 1.3) + 0.006 * fbm(p * 9 + V((seed, 0, 0))) +
-                  0.0025 * fbm(p * 38 + V((0, seed, 0))))
+        f = fold_off(u, vv)
+        bunch = 0.0035 * math.sin(vv * 140.0 + u * 6.0) * (1.0 - clamp(vv / 0.10))  # gathered under the belt
+        p += n * (pleat * (0.25 + 1.2 * vv ** 1.3) * f + 0.03 * vv ** 2 + bunch +
+                  0.003 * fbm(V((p.x * 8, p.y * 8, p.z * 1.5 + seed))))
+        p.z += 0.006 * f * smooth((vv - 0.8) / 0.2)  # hem rides up on the fold crests
+        if edges:
+            sid = sum(1 for e in edges if e < i)
+            s2 = smooth((v - (1 - split)) / split) ** 2
+            tang = V((0, 0, 1)).cross(n).normalized()
+            p += n * (0.018 * sw[sid][0] * s2) + tang * (0.008 * sw[sid][1] * s2)
         return p
 
-    # a few long vertical tears from the hem upward
-    tears = {rng.randrange(1, nu - 1): rng.uniform(0.15, 0.35) for _ in range(max(1, nu // 6))}
-
     def keep(i, j):
-        if i in tears and j >= nv * (1 - tears[i]):
+        uc, vc = (i + 0.5) / nu, (j + 0.5) / nv
+        if i in edges and vc > 1 - split:
             return False
+        for hu, hv, ru, rv in hole_list:
+            if ((uc - hu) / ru) ** 2 + ((vc - hv) / rv) ** 2 < 1.0 + 0.7 * fbm(V((uc * 11, vc * 11, seed))):
+                return False
         return True
 
-    return grid(fn, lin(0, 1, nu), lin(0, 1, nv), keep=keep, uv_fn=lambda u, v, i, j: (u, 1 - v))
+    md = grid(fn, lin(0, 1, nu), lin(0, 1, nv), keep=keep, uv_fn=lambda u, v, i, j: (u, 1 - v))
+    cols = nu + 1
+    bottom = [md.v[nv * cols + k] for k in range(cols)]
+    md.hem = [max(0.0, md.v[k].z - bottom[k % cols].z) for k in range(len(md.v))]
+    if threads is not None:
+        for i in range(cols):
+            if r.random() < 0.4:
+                p0 = bottom[i]
+                Lt = r.uniform(0.012, 0.05)
+                d = V((r.uniform(-0.004, 0.004), r.uniform(-0.004, 0.004), -Lt))
+                threads.add(tube(catmull_path([p0, p0 + d * 0.5 + V((0, 0, 0.002)), p0 + d], 3), 0.0007, 4))
+    return md
+
+
+def set_hem(md, nu, nv):
+    """Store metres above the bottom row (row nv) for a plain grid built with lin(0,1,nu) x lin(0,1,nv)."""
+    cols = nu + 1
+    md.hem = [max(0.0, md.v[k].z - md.v[nv * cols + k % cols].z) for k in range(len(md.v))]
+    return md
 
 
 def lamellar_panel(th_c, width_deg, z_top, rows, row_h, off0, flare, seed=0):
@@ -259,46 +299,65 @@ def build_skirts(coll, root):
     red_cloth = MD()
     apron = MD()
 
-    # --- long tattered skirt panels around the sides & back ------------------
+    # --- layered tattered skirt: overlapping narrow sashes in 3 layers around the sides & back ----
     def zb_side(th):
-        b = 0.5 - 0.5 * math.cos(th)  # 0 front, 1 back
-        return lerp(0.40, 0.29, smooth(b * 1.4))
+        b_ = 0.5 - 0.5 * math.cos(th)  # 0 front, 1 back
+        return lerp(0.40, 0.29, smooth(b_ * 1.4))
 
-    def off_skirt(th, z, v):
-        return 0.018 + 0.03 * v ** 1.5
+    threads = MD()
+    layers = {k: MD() for k in ("skirt_under", "skirt", "skirt_top")}
+    layer_specs = (  # off0, width_deg, step_deg, th_from, th_to, len_scale, key
+        (0.014, 26, 20, 104, 256, 1.00, "skirt_under"),
+        (0.024, 18, 22, 110, 250, 0.92, "skirt"),
+        (0.034, 14, 30, 150, 215, 0.80, "skirt_top"))
+    rs = random.Random(41)
+    for li, (off0, wdeg, step, a0, a1, ls, key) in enumerate(layer_specs):
+        a_ = a0 + (step / 2 if li == 1 else 0)
+        while a_ <= a1:
+            c = a_ + rs.uniform(-4, 4)
+            w = wdeg * rs.uniform(0.8, 1.2)
+            Ls = ls * rs.uniform(0.85, 1.08)
+            layers[key].add(hanging_panel(
+                deg(c - w / 2), deg(c + w / 2), 1.05,
+                lambda th, Ls=Ls: 1.05 - (1.05 - zb_side(th)) * Ls,
+                lambda th, z, v, o=off0: o + 0.03 * v ** 1.5,
+                max(8, int(w * 0.8)), 30, 0.018, 2, 0.22, 0.6, seed=li * 50 + int(c), slits=0.3,
+                strips=1 if w > 16 else 0, holes=1 if rs.random() < 0.4 else 0, threads=threads))
+            a_ += step
 
-    panels = [(118, 162), (152, 200)]
-    for side in (1, -1):
-        for k, (a0, a1) in enumerate(panels):
-            if side < 0 and a0 >= 160:
-                continue
-            th0, th1 = deg(a0) * side, deg(a1) * side
-            if side < 0:
-                th0, th1 = th1, th0
-            cloth_skirt.add(hanging_panel(th0, th1, 1.05, zb_side, off_skirt, 14, 22, 0.010, 3, 0.14, 0.6,
-                                          seed=k * 3 + (side > 0)))
-    # --- front apron (maedare) ------------------------------------------------
-    lens = tatter_lengths(14, 1.0, 0.10, 0.3)
+    # --- front apron (maedare): three torn tongues, gravity folds ----------------
+    tear_a = torn_profile(28, 0.06, 12, deep=2, tongues=0)
+    lens = [1.0 - t for t in tear_a]
+    AF = ((0.18, 0.10, 1.0), (0.42, 0.08, -0.8), (0.63, 0.12, 0.9), (0.86, 0.07, -0.7))
 
     def apron_fn(u, v, i, j):
         x = lerp(-0.068, 0.052, u)
-        L = lerp(1.0, lens[i], smooth((v - 0.75) / 0.25))
-        z = lerp(1.065, 0.515, v * L if v > 0.75 else v)
+        L = lens[i]
         if v > 0.75:
             z = 1.065 - (1.065 - 0.515) * (0.75 + (v - 0.75) * L)
+        else:
+            z = 1.065 - (1.065 - 0.515) * v
         th = math.atan2(x, 0.17)
         p = body_pt(th, max(z, 0.9), 0.034)
         y = p.y - 0.03 * smooth((1.0 - z) / 0.5)
-        return V((x, y + 0.004 * math.sin(u * 9 + v * 3), z))
+        f = sum(a2 * math.exp(-((u - uc) / (w2 * (0.6 + 0.6 * v))) ** 2) for uc, w2, a2 in AF)
+        y -= 0.012 * f * (0.2 + v)
+        x += 0.003 * math.sin(u * TAU * 2) * (1 - v)
+        return V((x, y, z))
 
-    apron.add(grid(apron_fn, lin(0, 1, 14), lin(0, 1, 22), uv_fn=lambda u, v, i, j: (u, 1 - v)))
+    def apron_keep(i, j):
+        return not (i in (9, 19) and (j + 0.5) / 30 > 0.8)
 
-    # --- front cloth panels: ornate gold-printed panel (left) and dark panels (right)
+    apron.add(set_hem(grid(apron_fn, lin(0, 1, 28), lin(0, 1, 30), keep=apron_keep,
+                           uv_fn=lambda u, v, i, j: (u, 1 - v)), 28, 30))
+
+    # --- front cloth panels: ornate gold-printed panel (left) and dark panel (right) ----
     gold_panel = MD()
     gold_panel.add(hanging_panel(deg(13), deg(41), 1.050, lambda th: 0.46, lambda th, z, v: 0.036 + 0.05 * v,
-                                 10, 22, 0.005, 2, 0.12, 0.7, seed=5, slits=0.3))
-    cloth_skirt.add(hanging_panel(deg(-40), deg(-16), 1.050, lambda th: 0.53, lambda th, z, v: 0.036 + 0.05 * v,
-                                  10, 22, 0.005, 2, 0.14, 0.7, seed=6, slits=0.3))
+                                 24, 30, 0.012, 3, 0.12, 0.7, seed=5, slits=0.3, strips=2, holes=1, threads=threads))
+    layers["skirt"].add(hanging_panel(deg(-40), deg(-16), 1.050, lambda th: 0.53, lambda th, z, v: 0.036 + 0.05 * v,
+                                      24, 30, 0.012, 3, 0.14, 0.7, seed=6, slits=0.3, strips=2, holes=1,
+                                      threads=threads))
 
     # --- kusazuri lamellar panels -------------------------------------------
     for th_c, wdeg, rows, rh, z_top in ((62, 40, 6, 0.068, 1.005), (-62, 40, 6, 0.068, 1.000),
@@ -309,30 +368,31 @@ def build_skirts(coll, root):
         gold.add(g)
         red.add(r)
 
-    # --- red cloth strips (right side + back) --------------------------------
-    for th_c, w, zb in ((-34, 6, 0.55), (-76, 7, 0.52), (-150, 5, 0.42)):
-        def zbf(th, zb=zb):
-            return zb
+    # --- red cloth: wide faded crimson panel at the right front + narrow strips + an under-layer at the back
+    for th_c, w, zb, off, nu_ in ((-29, 14, 0.50, 0.048, 14), (-80, 8, 0.52, 0.058, 6),
+                                  (-150, 6, 0.40, 0.058, 5), (168, 16, 0.33, 0.010, 12)):
+        red_cloth.add(hanging_panel(deg(th_c - w / 2), deg(th_c + w / 2), 1.045, lambda th, zb=zb: zb,
+                                    lambda th, z, v, off=off: off + 0.055 * v, nu_, 28, 0.010, 2, 0.22, 0.8,
+                                    seed=th_c, slits=0.35, strips=1 if w > 12 else 0, holes=2 if w > 12 else 0,
+                                    threads=threads))
 
-        red_cloth.add(hanging_panel(deg(th_c - w / 2), deg(th_c + w / 2), 1.045, zbf,
-                                    lambda th, z, v: 0.058 + 0.05 * v, 4, 18, 0.0, 1, 0.10, 0.8, seed=th_c,
-                                    slits=0.4))
-
-    for name, md, mat, sub, solid in (("Skirt_Tattered", cloth_skirt, M["cloth_skirt"], 1, 0.003),
-                                      ("Apron_Maedare", apron, M["cloth_apron"], 1, 0.003),
-                                      ("Front_Panel_Gold_Print", gold_panel, M["cloth_panel"], 1, 0.003),
-                                      ("Kusazuri_Plates", plates, M["lacquer_lamellar"], 1, 0.004),
+    for name, md, mat, sub, solid in (("Skirt_Under", layers["skirt_under"], M["cloth_skirt_under"], 2, 0.003),
+                                      ("Skirt_Mid", layers["skirt"], M["cloth_skirt"], 2, 0.003),
+                                      ("Skirt_Top", layers["skirt_top"], M["cloth_skirt_top"], 2, 0.003),
+                                      ("Apron_Maedare", apron, M["cloth_apron"], 2, 0.003),
+                                      ("Front_Panel_Gold_Print", gold_panel, M["cloth_panel"], 2, 0.003),
+                                      ("Red_Cloth", red_cloth, M["cloth_red"], 2, 0.002)):
+        ob = to_obj(name, md, mat, coll, parent=root)
+        cloth_mods(ob, sub, [(0.005, 0.016, {"stretch": (1, 1, 6), "hard": True})], solid, 0.0)
+    for name, md, mat, sub, solid in (("Kusazuri_Plates", plates, M["lacquer_lamellar"], 1, 0.004),
                                       ("Kusazuri_Gold", gold, M["bronze_rib"], 0, 0),
-                                      ("Kusazuri_Lacing", red, M["cord_red"], 0, 0),
-                                      ("Red_Cloth_Strips", red_cloth, M["cloth_red"], 1, 0.002)):
+                                      ("Kusazuri_Lacing", red, M["cord_red"], 0, 0)):
         ob = to_obj(name, md, mat, coll, parent=root)
         if solid:
             mod_solidify(ob, solid, 0.0)
         if sub:
             mod_subsurf(ob, 1, sub)
-        if mat.name.startswith("Cloth"):
-            from kage_lib import mod_wrinkle
-            mod_wrinkle(ob, 0.004, 0.03)
+    to_obj("Cloth_Hem_Threads", threads, M["cloth_thread"], coll, parent=root)
 
 
 # =============================================================================
@@ -733,37 +793,46 @@ def build_gear(coll, root):
 # =============================================================================
 def build_back(coll, root):
     xc = -0.075
-    lens = tatter_lengths(16, 1.0, 0.12, 0.35)
+    NU, NV = 36, 72
+    tear = torn_profile(NU, 0.05, 31, deep=3, tongues=1)
+    splits = {9, 21, 29}  # four ragged tongues in the bottom 12%
+    holes = ((0.30, 0.86, 0.10, 0.035), (0.68, 0.78, 0.07, 0.030), (0.52, 0.93, 0.12, 0.030))
 
     def banner(u, v, i, j):
-        # v: 0 top -> 1 bottom
-        w = lerp(0.150, 0.180, v)
+        # v: 0 top (tucked under the cowl) -> 1 bottom; widens toward the bottom
+        w = lerp(0.120, 0.215, smooth(v / 0.85))
         x = xc + lerp(-w / 2, w / 2, u)
-        z_top, z_bot = 1.565, 0.755
-        L = lens[i]
-        vv = v if v < 0.8 else 0.8 + (v - 0.8) * (1 + (L - 1) * 4)
+        z_top, z_bot = 1.53, 0.70
+        L = 1.0 - tear[i]
+        vv = v if v < 0.75 else 0.75 + (v - 0.75) * (L - 0.75) / 0.25
         z = lerp(z_top, z_bot, vv)
         th = math.pi - math.atan2(x, 0.15)
-        y1 = torso_pt(th, clamp(z, 1.0, 1.5), 0.022).y if z > 1.0 else 0
         if z > 1.33:
-            # over the shawl / cowl at the back of the neck
             y = torso_pt(th, z, 0.032 + 0.022 * smooth((z - 1.33) / 0.10)).y
         elif z > 1.0:
-            # over the back strap, belts and gear
             belt = math.exp(-((z - 1.12) / 0.09) ** 2)
             y = torso_pt(th, z, 0.036 + 0.030 * belt).y
         else:
             yb = hip_pt(th, 1.0, 0.070).y
             y = yb + (1.0 - z) * 0.10
-        y += 0.004 * math.sin(u * 7 + v * 5) + 0.006 * fbm(V((x * 12, z * 12, 0)))
+        y += 0.004 * math.sin(u * 7 + v * 5) + 0.004 * fbm(V((x * 6, z * 30, 0)))
+        sid = sum(1 for e in splits if e < i)
+        s2 = smooth((v - 0.88) / 0.12)
+        x += (sid - 1.5) * 0.006 * s2
+        y += 0.018 * s2 * ((sid * 0.37) % 1.0) + 0.02 * smooth((v - 0.8) / 0.2) * (1 - u) ** 2
+        y += 0.005 * math.sin(u * TAU * 3) * (1 - smooth(v / 0.12))  # gathered under the cowl
         return V((x, y, z))
 
-    md = grid(banner, lin(0, 1, 16), lin(0, 1, 40), uv_fn=lambda u, v, i, j: (u, 1 - v))
+    def keep(i, j):
+        uc, vc = (i + 0.5) / NU, (j + 0.5) / NV
+        if i in splits and vc > 0.88:
+            return False
+        return not any(((uc - a_) / c_) ** 2 + ((vc - b_) / d_) ** 2 < 1 + 0.7 * fbm(V((uc * 11, vc * 11, 3)))
+                       for a_, b_, c_, d_ in holes)
+
+    md = set_hem(grid(banner, lin(0, 1, NU), lin(0, 1, NV), keep=keep, uv_fn=lambda u, v, i, j: (u, 1 - v)), NU, NV)
     ob = to_obj("Back_Banner_Sashimono_Cloth", md, M["cloth_banner"], coll, parent=root)
-    mod_solidify(ob, 0.003, 0.0)
-    mod_subsurf(ob, 1, 2)
-    from kage_lib import mod_wrinkle
-    mod_wrinkle(ob, 0.004, 0.035)
+    cloth_mods(ob, 2, [(0.004, 0.018, {"stretch": (1, 1, 6), "hard": True})], 0.003, 0.0)
     # rope coil (left back) + grappling hook tucked beside it
     th = deg(157)
     n = body_normal(th, 0.95)

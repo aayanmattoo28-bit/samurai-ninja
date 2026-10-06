@@ -365,7 +365,7 @@ def make_mon_flower(S=512):
 KANJI = list("影武者忠義生死守天闇静月風炎魂道誠勇仁礼忍隠")
 
 
-def make_cloth_print(S=1024, name="cloth_print.png", density=1.0, seed=3, kanji_ratio=0.45):
+def make_cloth_print(S=1024, name="cloth_print.png", density=1.0, seed=3, kanji_ratio=0.45, gscale=1.0):
     r = random.Random(seed)
     im = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(im)
@@ -387,7 +387,7 @@ def make_cloth_print(S=1024, name="cloth_print.png", density=1.0, seed=3, kanji_
     for (x, y) in pts:
         kind = r.random()
         if kind < kanji_ratio:
-            g = glyph(r.choice(KANJI), int(S * r.uniform(0.07, 0.11)))
+            g = glyph(r.choice(KANJI), int(S * r.uniform(0.07, 0.11) * gscale))
             g = g.rotate(r.uniform(-12, 12), expand=True, resample=Image.BICUBIC)
             paste_center(im, g, x, y, wrap=True)
         elif kind < kanji_ratio + 0.25:
@@ -433,16 +433,19 @@ def make_apron(W=512, H=1280):
 def make_banner(W=512, H=2048):
     im = Image.new("L", (W, H), 0)
     d = ImageDraw.Draw(im)
+    cy0 = int(H * 0.27)
+    d.ellipse([W * 0.08, cy0 - W * 0.02, W * 0.92, cy0 + W * 0.82], fill=255)
+    d.ellipse([W * 0.18, cy0 + W * 0.08, W * 0.82, cy0 + W * 0.72], fill=0)
     crest = Image.open(os.path.join(OUT, "mon_bird.png")).resize((int(W * 0.80), int(W * 0.80)), Image.LANCZOS)
     crest = crest.point(lambda v: min(255, int(v * 1.6)))
-    im.paste(crest, (int(W * 0.10), int(H * 0.27)))
+    im.paste(255, (int(W * 0.10), cy0), crest)
     y = H * 0.58
     for ch in "影武者":
         g = glyph(ch, int(W * 0.48))
         paste_center(im, g, W * 0.5, y)
         y += W * 0.50
     # (no side rule lines: seen edge-on from the side views they read as a pale stripe)
-    im = distress(im, 0.22, seed=31)
+    im = distress(im, 0.30, seed=31)
     save(im, "banner_print.png")
 
 
@@ -693,6 +696,7 @@ if __name__ == "__main__":
     make_mon_flower()
     make_cloth_print()
     make_cloth_print(1024, "cloth_print_sparse.png", density=0.45, seed=4)
+    make_cloth_print(1024, "cloth_print_dense.png", density=1.8, seed=9, kanji_ratio=0.6, gscale=1.5)
     make_apron()
     make_panel_print()
     make_banner()

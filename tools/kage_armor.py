@@ -6,7 +6,7 @@ from mathutils import Matrix, Vector
 from kage_body import (ANKLE, CUIRASS, ELBOW, HIP, KNEE, SHOULDER, WRIST, torso_normal, torso_pt, superellipse)
 from kage_lib import (MD, RNG, TAU, V, ang, catmull_path, circle_profile, clamp, fbm, frames_along, grid,
                       interp_smooth, lathe, lerp, limb, lin, look_matrix, mod_solidify, mod_subsurf, rect_profile,
-                      resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere, frame_matrix)
+                      resample, smooth, sweep, to_obj, torus_md, tube, uv_sphere, frame_matrix, cloth_mods, torn_profile)
 from kage_mats import M
 
 
@@ -648,9 +648,7 @@ def build_arms(coll, root):
                                ("Gloves_Tekko_Trim", tekko_gold, M["gold"], 0), ("Arm_Red_Ties", red, M["cord_red"], 0)):
         ob = to_obj(name, both(md), mat, coll, parent=root)
         if name in ("Arm_Sleeves", "Arm_Forearm_Sleeves"):
-            from kage_lib import mod_wrinkle
-            mod_subsurf(ob, 1, sub)
-            mod_wrinkle(ob, 0.004, 0.02)
+            cloth_mods(ob, sub, [(0.003, 0.012, {"stretch": (8, 8, 1)})])
             continue
         if name in ("Kote_Bracers", "Gloves_Tekko"):
             mod_solidify(ob, 0.0035, -1.0)
@@ -726,16 +724,18 @@ def build_legs(coll, root):
     def r_pant(t, th):
         base = interp_smooth([(0.0, 0.116), (0.15, 0.130), (0.45, 0.140), (0.70, 0.136), (0.84, 0.122),
                               (0.92, 0.106), (1.0, 0.068)], t)[0]
-        folds = 0.014 * math.sin(th * 4 + t * 9) * t + 0.008 * math.sin(th * 7 - t * 15) + \
-            0.006 * math.sin(t * 50 + th) * smooth((t - 0.55) / 0.3) + \
-            0.004 * math.sin(th * 11 + t * 31) * (0.3 + t) + 0.003 * math.sin(th * 17 - t * 45)
-        folds += 0.005 * fbm(V((math.cos(th) * 2.5, math.sin(th) * 2.5, t * 9))) + \
-            0.0022 * fbm(V((math.cos(th) * 8, math.sin(th) * 8, t * 30)))
+        stack = smooth((t - 0.60) / 0.20)  # bloused over the gaiter tie
+        ring_ = math.sin(TAU * 8.5 * t + 1.3 * math.sin(th * 2 + 0.5) + 0.7 * math.sin(th * 3 + 1.1))
+        folds = 0.013 * stack * max(0.0, ring_) ** 1.5 - 0.004 * stack
+        grav = math.exp(-(math.sin(th * 2.5 + 0.35 * t + 0.4) ** 2) / 0.06)  # ~5 long folds from the hip
+        folds += 0.011 * smooth((t - 0.08) / 0.25) * (1.0 - stack) * grav
+        folds += 0.004 * math.sin(th * 11 + t * 31) * (0.3 + t) + \
+            0.003 * fbm(V((math.cos(th) * 2.5, math.sin(th) * 2.5, t * 30)))
         # slimmer front-to-back than side-to-side (th = 0 points forward)
         squash = 1.0 - 0.20 * math.cos(th) ** 2 * smooth((t - 0.1) / 0.3)
         return (base + folds) * squash
 
-    pants.add(limb(path, r_pant, 36, nt=40, ref=(0, -1, 0)))
+    pants.add(limb(path, r_pant, 72, nt=96, ref=(0, -1, 0)))
 
     # gaiter (kyahan) along knee->ankle
     g0 = KNEE + kdir * 0.04
@@ -828,7 +828,7 @@ def build_legs(coll, root):
         top = KNEE + (fwd * math.cos(aa) + sd * math.sin(aa)) * 0.10 + V((0, 0, 0.02))
         nrm = (fwd * math.cos(aa) + sd * math.sin(aa))
         tang = V((0, 0, 1)).cross(nrm).normalized()
-        lens = [L * RNG.uniform(0.7, 1.0) for _ in range(7)]
+        lens = [L * (1 - t_) for t_ in torn_profile(10, 0.25, k, deep=1, tongues=0)]
 
         def tf(u, v, i, j, top=top, nrm=nrm, tang=tang, lens=lens):
             w = 0.040
@@ -837,7 +837,7 @@ def build_legs(coll, root):
             p += nrm * (-0.035 * v + 0.004 * math.sin(v * 12 + u * 4))
             return p
 
-        tatters.add(grid(tf, lin(0, 1, 6), lin(0, 1, 10)))
+        tatters.add(grid(tf, lin(0, 1, 10), lin(0, 1, 10)))
 
     # boots
     def bfn(u, v, i, j):
@@ -930,11 +930,18 @@ def build_legs(coll, root):
             ("Kogake_Foot_Plates", kogake, M["lacquer"], 1, 0.003), ("Sandal_Cords", cords_dark, M["cord_dark"], 0, 0),
             ("Shin_Tatters", tatters, M["cloth"], 1, 0.002), ("Boot_Straps", straps_b, M["leather"], 1, 0)):
         ob = to_obj(name, both(md), mat, coll, parent=root)
+        if name == "Pants_Hakama":
+            cloth_mods(ob, sub, [(0.004, 0.018, {"stretch": (1, 1, 4), "hard": True}),
+                                 (0.0025, 0.010, {"stretch": (8, 8, 1)})])
+            continue
+        if name == "Gaiters_Kyahan":
+            cloth_mods(ob, sub, [(0.0015, 0.008, {"stretch": (8, 8, 1)})])
+            continue
+        if name == "Shin_Tatters":
+            cloth_mods(ob, sub, [(0.003, 0.012, {"stretch": (1, 1, 4), "hard": True})], solid, -1.0)
+            continue
         if solid:
             mod_solidify(ob, solid, -1.0)
         if sub:
             mod_subsurf(ob, 1, sub)
-        if name in ("Pants_Hakama", "Gaiters_Kyahan", "Shin_Tatters"):
-            from kage_lib import mod_wrinkle
-            mod_wrinkle(ob, 0.005, 0.025)
     to_obj("Knee_Mon", both(knee_crest), M["decal_mon_flower"], coll, parent=root)
