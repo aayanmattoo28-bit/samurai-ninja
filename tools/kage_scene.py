@@ -509,16 +509,16 @@ def build_environment(sc):
             crowns.add(cr)
     for ax, ay in ((0, 1), (0, -1), (1, 0), (-1, 0)):
         for side_, r in ((-1, 21.0), (1, 23.5)):
-            lat = side_ * RNG.uniform(2.6, 3.4)
+            lat = side_ * RNG.uniform(4.6, 5.4)
             x = ax * r + (ay != 0) * lat
             y = ay * r + (ax != 0) * lat
             z0 = hill_h(math.hypot(x, y))
-            h = RNG.uniform(8.5, 10.5)
+            h = RNG.uniform(7.0, 8.5)
             base = V((x, y, z0))
             path = [base, base + V((RNG.uniform(-0.4, 0.4), RNG.uniform(-0.4, 0.4), h * 0.55)),
                     base + V((side_ * 1.2 * (ay != 0), side_ * 1.2 * (ax != 0), h))]
             trunks.add(tube(catmull_path(path, 4), 0.20, 8, scale=lambda t: 1.0 - 0.6 * t))
-            for c in range(26):
+            for c in range(18):
                 cr = uv_sphere(1.0, 12, 8)
                 s_ = RNG.uniform(0.6, 1.2)
                 off = V((RNG.uniform(-2.6, 2.6), RNG.uniform(-2.6, 2.6), RNG.uniform(-1.4, 1.0)))
