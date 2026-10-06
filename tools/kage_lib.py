@@ -1218,3 +1218,37 @@ def mat_metal_engraved(name, tint=(0.36, 0.22, 0.10), img="filigree.png", uv_sca
     nb.output(g.outputs[0])
     m.diffuse_color = (*tint, 1)
     return m
+
+
+def mat_leather(name, base=(0.035, 0.017, 0.009), light=(0.075, 0.038, 0.019), rough=0.62, scuff=0.5, dirt=0.3):
+    """Worn grained leather: pebble grain, creases, scuffed lighter edges, grime in crevices."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    n1 = nb.noise(obj, 7.0, 8, 0.62)
+    col = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.3, 0.0), (0.75, 1.0)]), base, light)
+    vor = nb.n("ShaderNodeTexVoronoi", (-900, -300), feature="DISTANCE_TO_EDGE")
+    vor.inputs["Scale"].default_value = 160.0
+    nb.link(obj, vor.inputs["Vector"])
+    grain = nb.ramp(vor.outputs["Distance"], [(0.0, 0.0), (0.09, 1.0)])
+    cr = nb.noise(nb.mapping(obj, (60.0, 8.0, 60.0)), 1.0, 4, 0.6)
+    crease = nb.ramp(cr.outputs["Fac"], [(0.47, 0.0), (0.5, 1.0), (0.53, 0.0)])
+    crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.015))
+    col = nb.mix(nb.math("MULTIPLY", crev, 0.85), col, (0.012, 0.007, 0.004))
+    col = nb.mix(nb.math("MULTIPLY", crease, 0.5), col, (0.012, 0.007, 0.004))
+    en = nb.noise(obj, 25.0, 4, 0.6)
+    edge = nb.math("MULTIPLY", _edges(nb, 0.515, 0.56), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.62, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", edge, scuff), col, (light[0] * 1.6, light[1] * 1.6, light[2] * 1.6))
+    dn = nb.noise(obj, 12.0, 6, 0.6)
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(dn.outputs["Fac"], [(0.55, 0.0), (0.8, 1.0)]), dirt), col,
+                 (0.07, 0.06, 0.05))
+    r = nb.mixf(crev, rough, 0.85)
+    r = nb.mixf(edge, r, rough * 0.6)
+    h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.35), nb.math("MULTIPLY", crease, -0.6))
+    h = nb.math("ADD", h, nb.math("MULTIPLY", nb.noise(obj, 40.0, 5, 0.6).outputs["Fac"], 0.6))
+    p = nb.principled(Base_Color=col, Roughness=r, Coat_Weight=0.05, Specular_IOR_Level=0.35,
+                      Normal=nb.bump(h, 0.45, 0.0012))
+    nb.output(p.outputs[0])
+    m.diffuse_color = (*base, 1)
+    return m

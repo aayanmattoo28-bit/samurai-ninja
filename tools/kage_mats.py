@@ -1,5 +1,5 @@
 """All materials for the Kage Musha character (built once, shared by parts)."""
-from kage_lib import (mat_cloth, mat_decal, mat_eye, mat_gold, mat_lacquer, mat_leather_tooled, mat_mail,
+from kage_lib import (mat_cloth, mat_decal, mat_eye, mat_gold, mat_lacquer, mat_leather, mat_leather_tooled, mat_mail,
                       mat_metal_engraved, mat_simple, mat_tsuka)
 
 M = {}
@@ -62,23 +62,22 @@ def build_materials():
                                print_col=(0.40, 0.22, 0.09), fray=0.07)
     M["obi"] = mat_cloth("Cloth_Obi", base=(0.05, 0.010, 0.010), fade=(0.09, 0.02, 0.017), dust=0.2, weave=400)
     # --- cords / leather / organics ------------------------------------------
-    M["cord_red"] = mat_simple("Cord_Red", (0.20, 0.016, 0.014), rough=0.5, sheen=0.6, var_col=(0.18, 0.012, 0.01),
+    M["cord_red"] = mat_simple("Cord_Red", (0.15, 0.010, 0.009), rough=0.62, sheen=0.12, var_col=(0.18, 0.012, 0.01),
                                wave="BANDS", wave_scale=60.0, wave_str=0.8, bump_str=0.5)
-    M["cord_dark"] = mat_simple("Cord_Black", (0.02, 0.018, 0.017), rough=0.6, sheen=0.5,
+    M["cord_dark"] = mat_simple("Cord_Black", (0.02, 0.018, 0.017), rough=0.65, sheen=0.12,
                                 wave="BANDS", wave_scale=60.0, wave_str=0.8, bump_str=0.5)
-    M["tassel"] = mat_simple("Tassel_Silk", (0.20, 0.10, 0.035), rough=0.45, sheen=0.5, var_col=(0.12, 0.045, 0.015),
+    M["tassel"] = mat_simple("Tassel_Silk", (0.16, 0.08, 0.028), rough=0.5, sheen=0.15, var_col=(0.12, 0.045, 0.015),
                              wave="BANDS", wave_dir="X", wave_scale=180.0, wave_str=0.9, bump_str=0.4)
-    M["leather"] = mat_simple("Leather_Brown", (0.055, 0.027, 0.013), rough=0.55, var_col=(0.11, 0.055, 0.026),
-                              var_scale=9.0, bump_scale=90.0, bump_str=0.3, dirt=0.25, coat=0.1)
+    M["leather"] = mat_leather("Leather_Brown", base=(0.032, 0.016, 0.008), light=(0.070, 0.036, 0.018))
     M["leather_tooled"] = mat_leather_tooled("Leather_Pouch_Tooled", base=(0.024, 0.011, 0.006),
                                              light=(0.060, 0.026, 0.012))
-    M["leather_dark"] = mat_simple("Leather_Black", (0.022, 0.018, 0.016), rough=0.45, var_col=(0.05, 0.035, 0.028),
-                                   var_scale=10.0, bump_scale=120.0, bump_str=0.25, dirt=0.3, coat=0.15)
-    M["boot"] = mat_simple("Leather_Boot", (0.018, 0.014, 0.012), rough=0.5, var_col=(0.05, 0.036, 0.028),
-                           var_scale=8.0, bump_scale=80.0, bump_str=0.35, dirt=0.25)
-    M["gourd"] = mat_simple("Gourd_Lacquer", (0.13, 0.040, 0.013), rough=0.36, coat=0.25,
+    M["leather_dark"] = mat_leather("Leather_Black", base=(0.012, 0.010, 0.009), light=(0.030, 0.024, 0.020),
+                                    rough=0.55)
+    M["boot"] = mat_leather("Leather_Boot", base=(0.014, 0.011, 0.009), light=(0.034, 0.026, 0.020), rough=0.7,
+                            scuff=0.7, dirt=0.55)
+    M["gourd"] = mat_simple("Gourd_Lacquer", (0.11, 0.034, 0.012), rough=0.46, coat=0.12,
                             var_col=(0.07, 0.025, 0.01), var_scale=5.0, bump_scale=40.0, bump_str=0.1, dirt=0.35)
-    M["rope"] = mat_simple("Rope_Hemp", (0.085, 0.058, 0.034), rough=0.9, var_col=(0.05, 0.034, 0.02), var_scale=20.0,
+    M["rope"] = mat_simple("Rope_Hemp", (0.13, 0.092, 0.055), rough=0.9, var_col=(0.075, 0.052, 0.03), var_scale=20.0,
                            wave="BANDS", wave_scale=90.0, wave_str=1.0, bump_str=0.8, sheen=0.0)
     M["straw"] = mat_simple("Straw_Sandal", (0.035, 0.025, 0.016), rough=0.85, var_col=(0.08, 0.05, 0.03),
                             wave="BANDS", wave_dir="X", wave_scale=200.0, wave_str=1.0, bump_str=0.5, dirt=0.5)
