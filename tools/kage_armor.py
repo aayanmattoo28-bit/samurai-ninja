@@ -311,15 +311,15 @@ def build_bandoliers(coll, root):
 # =============================================================================
 # SODE (shoulder guards) with gilded dragons
 # =============================================================================
-SODE_W = 0.205
-SODE_R = 0.17
+SODE_W = 0.185
+SODE_R = 0.13
 SODE_LAMES = [
     # name, z_top, z_bot, flare_top, flare_bot, width_scale, material key
-    ("Kanmuri", 0.000, -0.026, 0.006, 0.006, 1.04, "lacquer"),
-    ("Ichi", -0.018, -0.152, 0.000, 0.012, 1.00, "dragon"),
-    ("Ni", -0.142, -0.194, 0.013, 0.020, 1.02, "lamellar"),
-    ("San", -0.184, -0.236, 0.021, 0.028, 1.04, "lamellar"),
-    ("Yon", -0.226, -0.278, 0.029, 0.036, 1.06, "lamellar"),
+    ("Kanmuri", 0.000, -0.024, 0.004, 0.004, 1.04, "lacquer"),
+    ("Ichi", -0.017, -0.140, 0.000, 0.008, 1.00, "dragon"),
+    ("Ni", -0.131, -0.179, 0.009, 0.014, 1.02, "lamellar"),
+    ("San", -0.169, -0.217, 0.015, 0.020, 1.04, "lamellar"),
+    ("Yon", -0.208, -0.256, 0.020, 0.025, 1.06, "lamellar"),
 ]
 
 
@@ -331,14 +331,14 @@ def sode_local(x, z, flare):
 def build_sode(coll, root):
     for side in (1, -1):
         sname = "L" if side > 0 else "R"
-        tilt = deg(22)
-        origin = V((0.243 * side, 0.016, 1.524))
+        tilt = deg(15)
+        origin = V((0.260 * side, 0.016, 1.528))
         xl = V((0, -1, 0)) if side > 0 else V((0, 1, 0))
         zl = V((0, 0, 1))
         yl = zl.cross(xl)
         rot = Matrix((xl, yl, zl)).transposed().to_4x4()
         tiltm = Matrix.Rotation(-tilt * side, 4, "Y")
-        turn = Matrix.Rotation(-deg(26) * side, 4, "Z")
+        turn = Matrix.Rotation(-deg(22) * side, 4, "Z")
         mw = Matrix.Translation(origin) @ turn @ tiltm @ rot
         plates = {"lacquer": MD(), "dragon": MD(), "lamellar": MD()}
         gold = MD()
@@ -355,7 +355,7 @@ def build_sode(coll, root):
 
             if mk == "dragon":
                 # map the emblem onto the visible window (below the lacing, above the next lame)
-                vis0, vis1 = -0.146, -0.040
+                vis0, vis1 = -0.134, -0.037
 
                 def uvd(u, v, i, j, zt=zt, zb=zb):
                     z = lerp(zb, zt, v)
@@ -558,8 +558,8 @@ def build_arms(coll, root):
 
     # upper sleeve (black printed cloth), slightly baggy, folds
     def r_up(t, th):
-        base = interp_smooth([(0.0, 0.054), (0.2, 0.062), (0.45, 0.067), (0.7, 0.066), (0.9, 0.062), (1.0, 0.060)], t)[0]
-        f = 0.006 * math.sin(th * 5 + t * 7) + 0.004 * math.sin(th * 9 - t * 13)
+        base = interp_smooth([(0.0, 0.050), (0.2, 0.056), (0.45, 0.060), (0.7, 0.059), (0.9, 0.055), (1.0, 0.053)], t)[0]
+        f = 0.005 * math.sin(th * 5 + t * 7) + 0.003 * math.sin(th * 9 - t * 13)
         return base + f * (0.4 + 0.6 * t)
 
     sleeve.add(limb([S + V((-0.02, 0, 0.03)), S, (S + E) / 2, E], r_up, 32, nt=24, ref=out_hint))
@@ -567,11 +567,11 @@ def build_arms(coll, root):
     ax, out, side = arm_axis_frame(E, Wr, out_hint)
 
     def r_puff(t, th):
-        return 0.058 + 0.014 * math.sin(math.pi * t) + 0.004 * math.sin(th * 7)
+        return 0.053 + 0.011 * math.sin(math.pi * t) + 0.004 * math.sin(th * 7)
 
     sleeve.add(limb([E + (E - S).normalized() * 0.03, E + ax * 0.03], r_puff, 28, nt=6, ref=out_hint))
     # forearm sleeve
-    forearm.add(limb([E, Wr], lambda t, th: lerp(0.054, 0.044, t) + 0.002 * math.sin(th * 6), 24, nt=10,
+    forearm.add(limb([E, Wr], lambda t, th: lerp(0.049, 0.040, t) + 0.002 * math.sin(th * 6), 24, nt=10,
                      ref=out_hint))
 
     # kote bracer plate: partial cylinder on the outer side
@@ -581,7 +581,7 @@ def build_arms(coll, root):
     b_pt = E.lerp(Wr, t1)
 
     def r_br(t, th):
-        r = lerp(0.062, 0.051, t) + 0.007 * smooth((t - 0.85) / 0.15)
+        r = lerp(0.056, 0.046, t) + 0.006 * smooth((t - 0.85) / 0.15)
         return r + 0.003 * math.cos(th) ** 2
 
     br = limb([a_pt, b_pt], r_br, 30, nt=20, ref=out_hint, th0=th0, th1=th1, uv_flip=True)
@@ -612,7 +612,7 @@ def build_arms(coll, root):
         b.transform(look_matrix(bk, (bk - c), fr_ax[0]))
         gold.add(b)
     # elbow cop (hiji-gane)
-    cp_c = E + out * 0.046 + V((0, 0.0, -0.005))
+    cp_c = E + out * 0.041 + V((0, 0.0, -0.005))
     dome = lathe([(0.0, 0.016), (0.012, 0.014), (0.024, 0.009), (0.032, 0.003), (0.035, 0.0), (0.0, 0.0)], 24)
     dome.transform(look_matrix(cp_c, out, ax))
     cop.add(dome)
@@ -659,7 +659,7 @@ def build_arms(coll, root):
 # =============================================================================
 # LEGS: pelvis, baggy pants, gaiters, suneate splints, knee plates, red ties, boots
 # =============================================================================
-TOE_OUT = deg(11)
+TOE_OUT = deg(15)
 
 
 def foot_frame():
@@ -668,9 +668,9 @@ def foot_frame():
     return F, Sd
 
 
-BOOT = [(-0.090, 0.028, 0.088), (-0.080, 0.044, 0.124), (-0.050, 0.051, 0.155), (-0.010, 0.053, 0.170),
-        (0.030, 0.055, 0.138), (0.075, 0.059, 0.100), (0.120, 0.061, 0.080), (0.160, 0.059, 0.068),
-        (0.192, 0.052, 0.060), (0.210, 0.038, 0.053), (0.220, 0.018, 0.046)]
+BOOT = [(-0.085, 0.026, 0.072), (-0.075, 0.040, 0.102), (-0.050, 0.047, 0.124), (-0.010, 0.049, 0.132),
+        (0.030, 0.051, 0.116), (0.075, 0.055, 0.092), (0.120, 0.057, 0.074), (0.160, 0.055, 0.062),
+        (0.192, 0.049, 0.054), (0.210, 0.036, 0.047), (0.220, 0.017, 0.041)]
 
 
 def boot_pt(s, phi, extra=0.0):
@@ -679,7 +679,7 @@ def boot_pt(s, phi, extra=0.0):
     zb = 0.020
     zc = (top + zb) / 2
     hh = (top - zb) / 2
-    e = 2.8
+    e = 2.4
     c, si = math.cos(phi), math.sin(phi)
     w = math.copysign(abs(c) ** (2 / e), c) * (hw + extra)
     h = math.copysign(abs(si) ** (2 / e), si) * (hh + extra)
@@ -719,12 +719,12 @@ def build_legs(coll, root):
     # baggy pants leg along hip -> knee -> tuck
     kdir = (ANKLE - KNEE).normalized()
     path = catmull_path([HIP + V((0, 0, 0.06)), HIP, (HIP + KNEE) / 2 + V((0.01, -0.01, 0)), KNEE,
-                         KNEE + kdir * 0.075], 6)
+                         KNEE + kdir * 0.105], 6)
 
     def r_pant(t, th):
-        base = interp_smooth([(0.0, 0.116), (0.15, 0.130), (0.45, 0.140), (0.70, 0.136), (0.84, 0.122),
-                              (0.92, 0.106), (1.0, 0.068)], t)[0]
-        stack = smooth((t - 0.60) / 0.20)  # bloused over the gaiter tie
+        base = interp_smooth([(0.0, 0.105), (0.15, 0.112), (0.45, 0.118), (0.62, 0.122), (0.75, 0.127),
+                              (0.86, 0.130), (0.94, 0.120), (1.0, 0.066)], t)[0]
+        stack = smooth((t - 0.72) / 0.16)  # bloused over the gaiter tie
         ring_ = math.sin(TAU * 8.5 * t + 1.3 * math.sin(th * 2 + 0.5) + 0.7 * math.sin(th * 3 + 1.1))
         folds = 0.013 * stack * max(0.0, ring_) ** 1.5 - 0.004 * stack
         grav = math.exp(-(math.sin(th * 2.5 + 0.35 * t + 0.4) ** 2) / 0.06)  # ~5 long folds from the hip
@@ -732,23 +732,23 @@ def build_legs(coll, root):
         folds += 0.004 * math.sin(th * 11 + t * 31) * (0.3 + t) + \
             0.003 * fbm(V((math.cos(th) * 2.5, math.sin(th) * 2.5, t * 30)))
         # slimmer front-to-back than side-to-side (th = 0 points forward)
-        squash = 1.0 - 0.20 * math.cos(th) ** 2 * smooth((t - 0.1) / 0.3)
+        squash = 1.0 - 0.10 * math.cos(th) ** 2 * smooth((t - 0.1) / 0.3)
         return (base + folds) * squash
 
     pants.add(limb(path, r_pant, 72, nt=96, ref=(0, -1, 0)))
 
     # gaiter (kyahan) along knee->ankle
-    g0 = KNEE + kdir * 0.04
-    g1 = ANKLE + kdir * -0.005
+    g0 = KNEE + kdir * 0.075
+    g1 = V((ANKLE.x, ANKLE.y + 0.002, 0.088))
 
     def r_gai(t, th):
-        base = interp_smooth([(0.0, 0.064), (0.25, 0.066), (0.55, 0.058), (0.85, 0.050), (1.0, 0.049)], t)[0]
+        base = interp_smooth([(0.0, 0.064), (0.25, 0.066), (0.55, 0.058), (0.85, 0.047), (1.0, 0.045)], t)[0]
         return base + 0.0018 * math.sin(th * 8 + t * 20) + 0.0015 * math.sin(t * 90)
 
     gaiter.add(limb([g0, g1], r_gai, 32, nt=24, ref=(0, -1, 0)))
     # suneate splints over the front of the shin
     sp0 = KNEE + kdir * 0.065
-    sp1 = ANKLE + kdir * -0.055
+    sp1 = ANKLE + kdir * -0.040
     ax, fwd, sd = arm_axis_frame(sp0, sp1, (0, -1, 0))
 
     def r_spl(t, th):
@@ -779,14 +779,14 @@ def build_legs(coll, root):
     mail = limb([sp0 + ax * 0.005, sp1 - ax * 0.005], lambda t, th: r_spl(t, th) - 0.0035, 40, nt=16, ref=(0, -1, 0),
                 th0=deg(-92), th1=deg(92))
     # knee plate (tate-age) with flower crest
-    kc = KNEE + V((0, -0.098, 0.005))
+    kc = KNEE + kdir * 0.125 + V((0, -0.090, 0))
 
     def knee_fn(u, v, i, j):
-        x = lerp(-0.050, 0.050, u)
-        z = lerp(-0.060, 0.065, v)
-        w = 1 - 0.25 * (z / 0.065) ** 2 if z > 0 else 1
+        x = lerp(-0.040, 0.040, u)
+        z = lerp(-0.035, 0.045, v)
+        w = 1 - 0.25 * (z / 0.045) ** 2 if z > 0 else 1
         x *= w
-        y = 0.022 * (x / 0.05) ** 2 + 0.012 * (z / 0.065) ** 2
+        y = 0.016 * (x / 0.04) ** 2 + 0.010 * (z / 0.045) ** 2
         return kc + V((x, y, z))
 
     kneep.add(grid(knee_fn, lin(0, 1, 14), lin(0, 1, 14)))
@@ -801,7 +801,7 @@ def build_legs(coll, root):
 
     knee_crest = grid(crest_fn, lin(0, 1, 10), lin(0, 1, 10))
     # red ties at top and ankle
-    for zt, rr, side_a in ((0.418, 0.073, 38), (0.168, 0.060, 40)):
+    for zt, rr, side_a in ((0.385, 0.070, 38), (0.142, 0.055, 40)):
         t = (KNEE.z - zt) / (KNEE.z - ANKLE.z)
         cc = KNEE.lerp(ANKLE, t)
         ring = []
@@ -843,14 +843,9 @@ def build_legs(coll, root):
     def bfn(u, v, i, j):
         return boot_pt(v, u)
 
-    boots.add(grid(bfn, lin(0, TAU, 32), lin(-0.088, 0.216, 30), closed_u=True))
+    boots.add(grid(bfn, lin(0, TAU, 32), lin(-0.083, 0.216, 30), closed_u=True))
     # shaft / cuff around the ankle
-    sh0 = V((ANKLE.x, ANKLE.y, 0.205))
-    sh1 = V((ANKLE.x, ANKLE.y + 0.004, 0.105))
-    boots.add(limb([sh0, sh1], lambda t, th: 0.054 + 0.006 * t + 0.002 * math.sin(th * 6), 28, nt=8,
-                   ref=(0, -1, 0)))
-    boots.add(limb([sh0 + V((0, 0, 0.004)), sh0 + V((0, 0, -0.016))],
-                   lambda t, th: 0.059 + 0.004 * math.sin(math.pi * t), 28, nt=4, ref=(0, -1, 0)))
+    # (no boot shaft: the gaiter tapers into a low tabi boot, as in the concept)
     # sole (waraji)
     def sole_fn(u, v, i, j):
         p = boot_pt(v, u, 0.008)
@@ -858,8 +853,8 @@ def build_legs(coll, root):
         return q + V((0, 0, 0.0 if math.sin(u) < 0 else 0.015))
 
     F, Sd = foot_frame()
-    outline = [boot_pt(s, 0, 0.007) for s in lin(-0.088, 0.216, 20)] + \
-              [boot_pt(s, math.pi, 0.007) for s in lin(0.216, -0.088, 20)]
+    outline = [boot_pt(s, 0, 0.007) for s in lin(-0.083, 0.216, 20)] + \
+              [boot_pt(s, math.pi, 0.007) for s in lin(0.216, -0.083, 20)]
     outline = [V((p.x, p.y, 0.0)) for p in outline]
     c = sum(outline, V()) / len(outline)
     sole = MD()

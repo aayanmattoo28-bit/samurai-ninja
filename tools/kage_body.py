@@ -11,12 +11,12 @@ from kage_mats import M
 # -----------------------------------------------------------------------------
 # Anchors (character's LEFT side; mirror x for the right side)
 # -----------------------------------------------------------------------------
-SHOULDER = V((0.212, 0.012, 1.445))
-ELBOW = V((0.282, 0.035, 1.180))
-WRIST = V((0.318, 0.002, 0.948))
+SHOULDER = V((0.212, 0.012, 1.462))
+ELBOW = V((0.268, 0.028, 1.178))
+WRIST = V((0.302, -0.058, 0.958))
 HIP = V((0.100, 0.000, 0.920))
-KNEE = V((0.188, -0.018, 0.470))
-ANKLE = V((0.245, 0.006, 0.112))
+KNEE = V((0.198, -0.020, 0.470))
+ANKLE = V((0.252, 0.006, 0.112))
 HEAD_C = V((0.0, 0.0, 1.752))
 
 
@@ -33,27 +33,27 @@ def mirror(p, side):
 # Tables: (z, rx, ry_front, ry_back)
 # -----------------------------------------------------------------------------
 CUIRASS = [
-    (0.990, 0.192, 0.152, 0.138),
-    (1.030, 0.190, 0.150, 0.136),
-    (1.080, 0.186, 0.146, 0.133),
-    (1.160, 0.189, 0.149, 0.136),
-    (1.240, 0.200, 0.158, 0.143),
-    (1.320, 0.212, 0.163, 0.147),
-    (1.400, 0.215, 0.156, 0.143),
-    (1.460, 0.207, 0.141, 0.134),
-    (1.500, 0.190, 0.122, 0.120),
-    (1.540, 0.140, 0.100, 0.100),
+    (0.990, 0.174, 0.140, 0.130),
+    (1.030, 0.170, 0.138, 0.128),
+    (1.080, 0.166, 0.135, 0.125),
+    (1.160, 0.172, 0.139, 0.127),
+    (1.240, 0.185, 0.148, 0.133),
+    (1.320, 0.196, 0.154, 0.138),
+    (1.400, 0.199, 0.150, 0.136),
+    (1.460, 0.192, 0.137, 0.129),
+    (1.500, 0.178, 0.119, 0.116),
+    (1.540, 0.135, 0.098, 0.097),
     (1.575, 0.090, 0.082, 0.084),
 ]
 
 HIPS = [
     (0.200, 0.300, 0.230, 0.250),
     (0.400, 0.278, 0.212, 0.232),
-    (0.600, 0.252, 0.196, 0.212),
-    (0.800, 0.226, 0.178, 0.190),
-    (0.950, 0.207, 0.164, 0.168),
-    (1.040, 0.198, 0.158, 0.150),
-    (1.100, 0.195, 0.155, 0.145),
+    (0.600, 0.246, 0.192, 0.208),
+    (0.800, 0.222, 0.174, 0.186),
+    (0.950, 0.200, 0.158, 0.160),
+    (1.040, 0.172, 0.140, 0.131),
+    (1.100, 0.167, 0.138, 0.128),
 ]
 
 
@@ -99,16 +99,16 @@ HOOD_OBJ = []
 # Head, eyes, hood + mask
 # -----------------------------------------------------------------------------
 HOOD = [
-    (1.560, 0.100, 0.096, 0.096),
-    (1.600, 0.092, 0.094, 0.092),
-    (1.640, 0.082, 0.098, 0.090),
-    (1.680, 0.090, 0.106, 0.100),
-    (1.720, 0.099, 0.109, 0.110),
-    (1.760, 0.101, 0.106, 0.116),
-    (1.800, 0.098, 0.099, 0.114),
-    (1.840, 0.084, 0.084, 0.098),
-    (1.870, 0.060, 0.058, 0.070),
-    (1.892, 0.024, 0.022, 0.028),
+    (1.560, 0.096, 0.094, 0.094),
+    (1.600, 0.086, 0.092, 0.090),
+    (1.640, 0.078, 0.096, 0.088),
+    (1.680, 0.083, 0.103, 0.097),
+    (1.720, 0.088, 0.106, 0.104),
+    (1.760, 0.089, 0.104, 0.108),
+    (1.800, 0.086, 0.097, 0.106),
+    (1.840, 0.074, 0.083, 0.092),
+    (1.870, 0.054, 0.057, 0.066),
+    (1.892, 0.022, 0.022, 0.026),
 ]
 EYE_Z0, EYE_Z1 = 1.739, 1.769
 
@@ -116,7 +116,7 @@ EYE_Z0, EYE_Z1 = 1.739, 1.769
 def build_head(coll, parent):
     # skin
     md = uv_sphere(1.0, 32, 20)
-    md.v = [V((p.x * 0.079, p.y * 0.094, p.z * 0.108)) + HEAD_C + V((0, 0.002, -0.004)) for p in md.v]
+    md.v = [V((p.x * 0.075, p.y * 0.094, p.z * 0.108)) + HEAD_C + V((0, 0.002, -0.004)) for p in md.v]
     # brow ridge + nose bridge bulge on the skin (visible through the slit)
     out = []
     for p in md.v:
@@ -349,9 +349,9 @@ def build_head(coll, parent):
 # Kasa (conical lacquered hat) with ribs, rim, finial and tassels
 # -----------------------------------------------------------------------------
 KASA_BASE = V((0.0, 0.006, 1.778))
-KASA_R = 0.262
-KASA_PROFILE = [(0.0, 0.136), (0.010, 0.130), (0.025, 0.119), (0.050, 0.101), (0.090, 0.077),
-                (0.130, 0.055), (0.170, 0.035), (0.210, 0.017), (0.245, 0.004), (0.262, -0.002)]
+KASA_R = 0.254
+KASA_PROFILE = [(0.0, 0.136), (0.0097, 0.130), (0.024, 0.119), (0.0485, 0.101), (0.087, 0.077),
+                (0.126, 0.055), (0.165, 0.035), (0.204, 0.017), (0.238, 0.004), (0.254, -0.002)]
 
 
 def kasa_h(r):
@@ -360,6 +360,8 @@ def kasa_h(r):
 
 def build_kasa(coll, parent):
     base = KASA_BASE
+    PIV = V((0, 0, 1.80))
+    TILT = Matrix.Translation(PIV) @ Matrix.Rotation(math.radians(3.0), 4, "X") @ Matrix.Translation(-PIV)
     prof = []
     for k in range(41):
         r = KASA_R * k / 40
@@ -367,7 +369,7 @@ def build_kasa(coll, parent):
     # main shell: u = angle, v = radius fraction  (uv v: 0 apex -> 1 rim)
     md = lathe(prof, 96, uv_v=lambda j: j / 40)
     md.translate(base)
-    shell = to_obj("Kasa_Shell", md, M["lacquer_hat"], coll, parent=parent)
+    shell = to_obj("Kasa_Shell", md.transform(TILT), M["lacquer_hat"], coll, parent=parent)
     mod_solidify(shell, 0.005, -1.0)
     mod_subsurf(shell, 1, 2)
 
@@ -397,14 +399,14 @@ def build_kasa(coll, parent):
             path.append(p)
             ups.append(n)
         ribs.add(sweep(path[:-1], rect_profile(0.0055, 0.0028, 1), up=lambda i, p, ups=ups: ups[i], closed_path=True))
-    rb = to_obj("Kasa_Ribs", ribs, M["kasa_rib"], coll, parent=parent)
+    rb = to_obj("Kasa_Ribs", ribs.transform(TILT), M["kasa_rib"], coll, parent=parent)
     mod_subsurf(rb, 0, 1)
 
     # rim band
     path = [base + V((KASA_R * math.sin(TAU * s / 128), -KASA_R * math.cos(TAU * s / 128), kasa_h(KASA_R) - 0.001))
             for s in range(128)]
     rim = sweep(path, rect_profile(0.012, 0.016, 2), up=(0, 0, 1), closed_path=True)
-    rimo = to_obj("Kasa_Rim", rim, M["kasa_rib"], coll, parent=parent)
+    rimo = to_obj("Kasa_Rim", rim.transform(TILT), M["kasa_rib"], coll, parent=parent)
     mod_subsurf(rimo, 1, 2)
 
     # finial
@@ -412,13 +414,13 @@ def build_kasa(coll, parent):
                  (0.011, 0.146), (0.008, 0.144), (0.015, 0.142), (0.020, 0.137), (0.021, 0.134), (0.018, 0.131),
                  (0.0, 0.130)], 32)
     fin.translate(base)
-    fo = to_obj("Kasa_Finial", fin, M["gold_dark"], coll, parent=parent)
+    fo = to_obj("Kasa_Finial", fin.transform(TILT), M["gold_dark"], coll, parent=parent)
     mod_subsurf(fo, 1, 2)
 
     # inner head ring (hidden support)
-    ring = torus_md(0.085, 0.010, 32, 8)
+    ring = torus_md(0.078, 0.010, 32, 8)
     ring.translate(base + V((0, -0.004, 0.055)))
-    to_obj("Kasa_HeadRing", ring, M["cloth_plain"], coll, parent=parent)
+    to_obj("Kasa_HeadRing", ring.transform(TILT), M["cloth_plain"], coll, parent=parent)
 
     # tassels around the rim (none at the very front, as in the concept)
     tassel_md = MD()
@@ -426,7 +428,7 @@ def build_kasa(coll, parent):
     cord_md = MD()
     for k in range(1, 8):
         a = TAU * k / 8
-        top = base + V((0.256 * math.sin(a), -0.256 * math.cos(a), kasa_h(0.256) - 0.006))
+        top = base + V((0.248 * math.sin(a), -0.248 * math.cos(a), kasa_h(0.248) - 0.006))
         drop = RNG.uniform(0.0, 0.006)
         cord_md.add(tube([top, top + V((0, 0, -0.012 - drop))], 0.0018, 6))
         cap_top = top + V((0, 0, -0.012 - drop))
@@ -444,6 +446,6 @@ def build_kasa(coll, parent):
             return ct + V((rr * math.sin(u), -rr * math.cos(u), z))
 
         tassel_md.add(grid(fr, lin(0, TAU, 24), lin(0, 1, 8), closed_u=True))
-    to_obj("Kasa_Tassels", tassel_md, M["tassel"], coll, parent=parent)
-    to_obj("Kasa_TasselCaps", cap_md, M["gold_dark"], coll, parent=parent)
-    to_obj("Kasa_TasselCords", cord_md, M["tassel"], coll, parent=parent)
+    to_obj("Kasa_Tassels", tassel_md.transform(TILT), M["tassel"], coll, parent=parent)
+    to_obj("Kasa_TasselCaps", cap_md.transform(TILT), M["gold_dark"], coll, parent=parent)
+    to_obj("Kasa_TasselCords", cord_md.transform(TILT), M["tassel"], coll, parent=parent)

@@ -263,7 +263,7 @@ def lamellar_panel(th_c, width_deg, z_top, rows, row_h, off0, flare, seed=0):
         zt = z_top - k * pitch
         zb = zt - row_h
         o_top = off0 + k * flare
-        o_bot = off0 + (k + 1) * flare + 0.006
+        o_bot = off0 + (k + 1) * flare + 0.006 + 0.002 * max(0, k - 4)
         wk = hw * (1 + 0.05 * k)
 
         def fn(u, v, i=0, j=0, zt=zt, zb=zb, o_top=o_top, o_bot=o_bot, wk=wk):
@@ -360,10 +360,10 @@ def build_skirts(coll, root):
                                       threads=threads))
 
     # --- kusazuri lamellar panels -------------------------------------------
-    for th_c, wdeg, rows, rh, z_top in ((62, 40, 6, 0.068, 1.005), (-62, 40, 6, 0.068, 1.000),
-                                         (100, 40, 7, 0.068, 1.000), (-100, 40, 7, 0.068, 1.000),
-                                         (136, 38, 6, 0.068, 0.995), (-136, 38, 6, 0.068, 0.995)):
-        p, g, r = lamellar_panel(deg(th_c), wdeg, z_top, rows, rh, 0.046, 0.0045)
+    for th_c, wdeg, rows, rh, z_top in ((62, 38, 7, 0.068, 0.985), (-62, 38, 7, 0.068, 0.980),
+                                         (100, 38, 7, 0.072, 0.980), (-100, 38, 7, 0.072, 0.980),
+                                         (136, 36, 7, 0.068, 0.975), (-136, 36, 7, 0.068, 0.975)):
+        p, g, r = lamellar_panel(deg(th_c), wdeg, z_top, rows, rh, 0.042, 0.0030)
         plates.add(p)
         gold.add(g)
         red.add(r)
@@ -489,12 +489,12 @@ def build_swords(coll, root):
     # Katana: through the obi on the left hip, hilt forward/inward, scabbard down & back
     kat = W.sword_parts(0.27, 0.76, 0.030)
     s = V((0.45, 0.78, -0.36)).normalized()
-    T = V((0.060, -0.218, 1.148))
+    T = V((0.060, -0.209, 1.148))
     W.place_sword(kat, frame_matrix(T, s, (0, 0, 1)), coll, root, "Katana")
     # Wakizashi: right hip
     wak = W.sword_parts(0.19, 0.48, 0.012, wrap="tsuka_gold")
     sw = V((-0.24, 0.95, -0.14)).normalized()
-    Tw = V((-0.200, -0.175, 1.120))
+    Tw = V((-0.186, -0.168, 1.120))
     W.place_sword(wak, frame_matrix(Tw, sw, (0, 0, 1)), coll, root, "Wakizashi")
 
 
@@ -723,11 +723,10 @@ def build_gear(coll, root):
                              "flask", "flask_tassel", "flask_body", "steel", "grip", "iron")}
     # gourds (hyotan)
     place_gourd(deg(14), 0.80, 0.80, 0.085, mds, 0.05)
-    place_gourd(deg(70), 0.80, 0.95, 0.090, mds, -0.06)
-    place_gourd(deg(108), 0.80, 0.95, 0.090, mds, 0.08)
-    place_gourd(deg(175), 0.735, 1.18, 0.105, mds, 0.0)
+    place_gourd(deg(40), 0.82, 0.85, 0.085, mds, -0.04)
+    place_gourd(deg(172), 0.585, 1.10, 0.100, mds, 0.0)
     # smoke bombs cluster (front right)
-    for k, (th, z, r) in enumerate(((-47, 0.905, 0.047), (-72, 0.975, 0.034), (-86, 0.945, 0.032))):
+    for k, (th, z, r) in enumerate(((-36, 0.905, 0.047), (-50, 0.975, 0.034), (-60, 0.945, 0.032))):
         c = body_pt(deg(th), z, 0.105 + r)
         smoke_bomb(c, r, mds, turn=k)
         top = body_pt(deg(th), 1.085, 0.034)
