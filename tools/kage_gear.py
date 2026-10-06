@@ -734,7 +734,7 @@ def build_back(coll, root):
         y1 = torso_pt(th, clamp(z, 1.0, 1.5), 0.022).y if z > 1.0 else 0
         if z > 1.33:
             # over the shawl / cowl at the back of the neck
-            y = torso_pt(th, z, 0.034 + 0.040 * smooth((z - 1.33) / 0.10)).y
+            y = torso_pt(th, z, 0.032 + 0.022 * smooth((z - 1.33) / 0.10)).y
         elif z > 1.0:
             # over the back strap, belts and gear
             belt = math.exp(-((z - 1.12) / 0.09) ** 2)
@@ -750,10 +750,10 @@ def build_back(coll, root):
     mod_solidify(ob, 0.003, 0.0)
     mod_subsurf(ob, 1, 2)
     # rope coil (left back) + grappling hook tucked beside it
-    th = deg(150)
+    th = deg(157)
     n = body_normal(th, 0.95)
     n = V((n.x, n.y, 0)).normalized()
-    p = body_pt(th, 0.895, 0.075)
+    p = body_pt(th, 0.985, 0.105)
     x = V((0, 0, 1)).cross(-n).normalized()
     mm = Matrix((x, -n, V((0, 0, 1)))).transposed().to_4x4()
     mm.translation = p

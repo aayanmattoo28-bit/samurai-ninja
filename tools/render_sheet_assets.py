@@ -19,8 +19,8 @@ ITEMS = {
     "UtilityPouch": ((-0.55, 0.0, 0.96), (-0.55, -0.42, 1.06), 50, (300, 420)),
     "ThrowingKnives": ((-0.25, 0.0, 1.02), (-0.25, -0.50, 1.08), 50, (300, 420)),
     "GrapplingHook": ((0.04, 0.0, 0.95), (0.04, -0.55, 1.22), 50, (420, 420)),
-    "Katana": ((0.745, 0.17, 1.36), (0.745, -0.52, 1.40), 50, (700, 200)),
-    "Wakizashi": ((0.765, 0.17, 1.19), (0.765, -0.40, 1.22), 50, (700, 200)),
+    "Katana": ((0.46, 0.17, 1.36), (0.46, -0.52, 1.36), 50, (700, 200)),
+    "Wakizashi": ((0.60, 0.17, 1.19), (0.60, -0.40, 1.19), 50, (700, 200)),
     "Matchlock": ((0.20, -0.24, 0.96), (0.25, -0.75, 1.20), 45, (640, 300)),
     "DrawnKatana": ((0.70, -0.22, 0.92), (0.70, -1.05, 1.30), 40, (640, 260)),
 }
@@ -129,7 +129,7 @@ def main():
         if name in ("Katana", "Wakizashi"):
             c.data.type = "ORTHO"
             c.data.sensor_fit = "HORIZONTAL"
-            c.data.ortho_scale = 1.10 if name == "Katana" else 0.76
+            c.data.ortho_scale = 0.46 if name == "Katana" else 0.40
         c.data.dof.use_dof = True
         c.data.dof.focus_distance = (Vector(cpos) - Vector(tgt)).length
         c.data.dof.aperture_fstop = 5.6

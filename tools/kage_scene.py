@@ -24,7 +24,7 @@ DETAILS = {
     "Kasa": ((-0.42, -0.62, 1.93), (0.0, 0.0, 1.80), 50),
     "Mask": ((-0.18, -0.62, 1.74), (0.0, 0.0, 1.70), 50),
     "Armor": ((0.85, -0.25, 1.40), (0.30, 0.0, 1.40), 50),
-    "Fabric": ((-0.07, 0.80, 1.27), (-0.075, 0.20, 1.24), 50),
+    "Fabric": ((-0.07, 0.66, 1.26), (-0.075, 0.20, 1.24), 50),
     "LegArmor": ((0.48, -0.78, 0.34), (0.24, -0.02, 0.24), 50),
 }
 
@@ -199,7 +199,7 @@ def build_cameras(sc):
         cam = make_camera("CAM_" + name, coll, loc, rot=rot, focal=TURN_FOCAL)
         cam.data.dof.use_dof = True
         cam.data.dof.focus_distance = 6.3
-        cam.data.dof.aperture_fstop = 8.0
+        cam.data.dof.aperture_fstop = 11.0
         first = first or cam
     for name, (loc, tgt, f) in DETAILS.items():
         cam = make_camera("CAM_Detail_" + name, coll, loc, target=tgt, focal=f)
@@ -259,7 +259,7 @@ def mat_stone(name="Stone_Courtyard"):
     return m
 
 
-def fog_wrap(mat, fog_col=(0.36, 0.30, 0.32), near=40.0, far=420.0, max_fac=0.28):
+def fog_wrap(mat, fog_col=(0.36, 0.30, 0.32), near=60.0, far=480.0, max_fac=0.22):
     """Blend a material's surface toward a haze colour with camera distance (aerial perspective)."""
     nt = mat.node_tree
     out = [n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"][0]
@@ -292,8 +292,8 @@ def mat_foliage(name):
     nb.link(obj, vor.inputs["Vector"])
     leafmask = nb.ramp(vor.outputs["Distance"], [(0.52, 1.0), (0.62, 0.0)])
     n = nb.noise(obj, 0.8, 6, 0.6)
-    col = nb.ramp(n.outputs["Fac"], [(0.30, (0.20, 0.012, 0.008)), (0.50, (0.48, 0.05, 0.015)),
-                                     (0.70, (0.70, 0.17, 0.03)), (0.85, (0.55, 0.30, 0.06))])
+    col = nb.ramp(n.outputs["Fac"], [(0.30, (0.22, 0.010, 0.008)), (0.50, (0.55, 0.045, 0.015)),
+                                     (0.70, (0.78, 0.16, 0.03)), (0.85, (0.62, 0.30, 0.05))])
     p = nb.principled(Base_Color=col, Roughness=0.6, Subsurface_Weight=0.15)
     tr = nb.n("ShaderNodeBsdfTransparent", (200, -300))
     mx = nb.n("ShaderNodeMixShader", (450, 0))
@@ -522,6 +522,27 @@ def build_environment(sc):
                 cr = uv_sphere(1.0, 12, 8)
                 s_ = RNG.uniform(0.6, 1.2)
                 off = V((RNG.uniform(-2.6, 2.6), RNG.uniform(-2.6, 2.6), RNG.uniform(-1.4, 1.0)))
+                cen = path[-1] + off
+                cr.v = [cen + V((p.x * s_ * 1.3, p.y * s_ * 1.3, p.z * s_ * 0.75)) +
+                        V((p.x, p.y, p.z)) * s_ * 0.35 * fbm(p * 2.5 + cen) for p in cr.v]
+                crowns.add(cr)
+    for ax, ay in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        for q in range(6):
+            r = RNG.uniform(34.0, 70.0)
+            side_ = -1 if q % 2 else 1
+            lat = side_ * RNG.uniform(2.8, 6.5) * r / 45.0
+            x = ax * r + (ay != 0) * lat
+            y = ay * r + (ax != 0) * lat
+            z0 = hill_h(math.hypot(x, y))
+            h = RNG.uniform(6.5, 9.5)
+            base = V((x, y, z0))
+            path = [base, base + V((RNG.uniform(-0.4, 0.4), RNG.uniform(-0.4, 0.4), h * 0.55)),
+                    base + V((RNG.uniform(-0.8, 0.8), RNG.uniform(-0.8, 0.8), h))]
+            trunks.add(tube(catmull_path(path, 4), 0.18, 8, scale=lambda t: 1.0 - 0.6 * t))
+            for c in range(20):
+                cr = uv_sphere(1.0, 12, 8)
+                s_ = RNG.uniform(0.7, 1.3)
+                off = V((RNG.uniform(-2.4, 2.4), RNG.uniform(-2.4, 2.4), RNG.uniform(-1.2, 1.0)))
                 cen = path[-1] + off
                 cr.v = [cen + V((p.x * s_ * 1.3, p.y * s_ * 1.3, p.z * s_ * 0.75)) +
                         V((p.x, p.y, p.z)) * s_ * 0.35 * fbm(p * 2.5 + cen) for p in cr.v]

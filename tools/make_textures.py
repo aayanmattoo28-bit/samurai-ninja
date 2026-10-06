@@ -441,9 +441,7 @@ def make_banner(W=512, H=2048):
         g = glyph(ch, int(W * 0.48))
         paste_center(im, g, W * 0.5, y)
         y += W * 0.50
-    # side rule lines
-    d.line([18, 0, 18, H], fill=255, width=6)
-    d.line([W - 18, 0, W - 18, H], fill=255, width=6)
+    # (no side rule lines: seen edge-on from the side views they read as a pale stripe)
     im = distress(im, 0.22, seed=31)
     save(im, "banner_print.png")
 

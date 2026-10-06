@@ -20,6 +20,10 @@ ANKLE = V((0.245, 0.006, 0.112))
 HEAD_C = V((0.0, 0.0, 1.752))
 
 
+def deg(a):
+    return math.radians(a)
+
+
 def mirror(p, side):
     return V((p.x * side, p.y, p.z))
 
@@ -221,6 +225,16 @@ def build_head(coll, parent):
 
     md = grid(hood_fn, us, vs, closed_u=True, keep=keep, pole_v1=False)
     hood = to_obj("Hood_Mask", md, M["cloth_hood"], coll, parent=parent)
+    # embroidered gold flower on the mask cheek (as in the mask detail of the concept)
+    def emb(u, v, i, j):
+        th = deg(lerp(14, 34, u))
+        z = lerp(1.682, 1.716, v)
+        p = torso_pt(th, z, 0.0, HOOD, 2.0)
+        front = max(0.0, math.cos(th))
+        p.y -= 0.010 * front ** 6 * math.exp(-((z - 1.715) / 0.022) ** 2)
+        nrm = V((math.sin(th), -math.cos(th), 0))
+        return p + nrm * 0.0065
+    to_obj("Mask_Embroidery", grid(emb, lin(0, 1, 8), lin(0, 1, 8)), M["decal_mask_flower"], coll, parent=parent)
     mod_solidify(hood, 0.005, 1.0)
     mod_subsurf(hood, 1, 2)
 

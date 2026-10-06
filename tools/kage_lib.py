@@ -871,16 +871,16 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         rough = nb.math("ADD", nb.math("MULTIPLY", rough, 0.5), 0.35)
         sepw = nb.n("ShaderNodeSeparateXYZ", (-1100, -900))
         nb.link(tc.outputs["UV"], sepw.inputs[0])
-        fu = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[0], 240.0))
-        fv = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[1], 46.0))
+        fu = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[0], 160.0))
+        fv = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[1], 30.0))
         cu = nb.math("GREATER_THAN", fu, 0.5)
         cv = nb.math("GREATER_THAN", fv, 0.5)
         chk = nb.math("ABSOLUTE", nb.math("SUBTRACT", cu, cv))
         strand = nb.math("MULTIPLY", nb.math("SINE", nb.math("MULTIPLY", fu, 3.14159)),
                          nb.math("SINE", nb.math("MULTIPLY", fv, 3.14159)))
         weave_h = nb.math("ADD", nb.math("MULTIPLY", chk, 0.6), nb.math("MULTIPLY", strand, 0.6))
-        basecol = nb.mix(nb.math("MULTIPLY", chk, 0.6), basecol, (0.045, 0.032, 0.020))
-        height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 1.2))
+        basecol = nb.mix(nb.math("MULTIPLY", chk, 0.8), basecol, (0.070, 0.048, 0.028))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 2.0))
     lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=coat,
                          Coat_Roughness=0.22, Specular_IOR_Level=0.32)
     nb.link(nb.math("SUBTRACT", coat, nb.math("MULTIPLY", nb.math("MAXIMUM", upd, crev), coat)),
@@ -975,8 +975,8 @@ def mat_cloth(name, base=(0.012, 0.0115, 0.0115), print_img=None, print_scale=(1
     fold = nb.noise(obj, 25.0, 4, 0.5)
     h = nb.math("ADD", h, nb.math("MULTIPLY", fold.outputs["Fac"], 1.5))
     bmp = nb.bump(h, 0.30, 0.0006)
-    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=0.14,
-                      Sheen_Roughness=0.55, Sheen_Tint=(0.45, 0.42, 0.40), Normal=bmp)
+    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=0.10,
+                      Sheen_Roughness=0.55, Sheen_Tint=(0.40, 0.37, 0.35), Specular_IOR_Level=0.22, Normal=bmp)
     shader = p.outputs[0]
     if fray > 0:
         # frayed hem: loose vertical threads and holes near uv v = 0 (the bottom edge of hanging panels)

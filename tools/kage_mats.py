@@ -54,7 +54,7 @@ def build_materials():
     M["cloth_panel"] = mat_cloth("Cloth_Panel_Gold", print_img="panel_print.png", print_scale=(1, 1),
                                  extension="CLIP", print_strength=1.0, print_col=(0.46, 0.31, 0.13), fray=0.07)
     M["cloth_banner"] = mat_cloth("Cloth_Banner", print_img="banner_print.png", print_scale=(1, 1),
-                                  extension="CLIP", print_strength=1.0, print_col=(0.42, 0.29, 0.13), fray=0.07)
+                                  extension="CLIP", print_strength=1.0, print_col=(0.56, 0.39, 0.17), fray=0.07)
     M["cloth_pants"] = mat_cloth("Cloth_Pants", print_img="cloth_print_sparse.png", print_scale=(3, 3),
                                  print_strength=0.22, dust=0.25, print_col=(0.24, 0.16, 0.08))
     M["cloth_red"] = mat_cloth("Cloth_Crimson", base=(0.08, 0.008, 0.008), fade=(0.14, 0.02, 0.017),
@@ -70,8 +70,8 @@ def build_materials():
                              wave="BANDS", wave_dir="X", wave_scale=180.0, wave_str=0.9, bump_str=0.4)
     M["leather"] = mat_simple("Leather_Brown", (0.055, 0.027, 0.013), rough=0.55, var_col=(0.11, 0.055, 0.026),
                               var_scale=9.0, bump_scale=90.0, bump_str=0.3, dirt=0.25, coat=0.1)
-    M["leather_tooled"] = mat_leather_tooled("Leather_Pouch_Tooled", base=(0.034, 0.016, 0.008),
-                                             light=(0.075, 0.037, 0.018))
+    M["leather_tooled"] = mat_leather_tooled("Leather_Pouch_Tooled", base=(0.024, 0.011, 0.006),
+                                             light=(0.060, 0.026, 0.012))
     M["leather_dark"] = mat_simple("Leather_Black", (0.022, 0.018, 0.016), rough=0.45, var_col=(0.05, 0.035, 0.028),
                                    var_scale=10.0, bump_scale=120.0, bump_str=0.25, dirt=0.3, coat=0.15)
     M["boot"] = mat_simple("Leather_Boot", (0.018, 0.014, 0.012), rough=0.5, var_col=(0.05, 0.036, 0.028),
@@ -94,7 +94,9 @@ def build_materials():
     M["decal_mon_flower"] = mat_decal("Decal_Mon_Flower", "mon_flower.png", wear=0.2)
     M["decal_smoke"] = mat_decal("Decal_SmokeBomb_Kanji", "smokebomb_kanji.png", wear=0.05, tint=(0.78, 0.56, 0.25),
                                  rough=0.35)
-    M["bronze_engraved"] = mat_metal_engraved("Bronze_Engraved_Flask")
+    M["bronze_engraved"] = mat_metal_engraved("Bronze_Engraved_Flask", tint=(0.13, 0.08, 0.04), rough=0.58)
     M["decal_dragon_L"] = mat_decal("Decal_Dragon_L", "dragon_emblem.png", wear=0.25)
+    M["decal_mask_flower"] = mat_decal("Decal_Mask_Flower", "mon_flower.png", wear=0.35, tint=(0.40, 0.27, 0.12),
+                                       metal=0.3, rough=0.5)
     M["decal_dragon_R"] = mat_decal("Decal_Dragon_R", "dragon_emblem.png", wear=0.25, flip_u=True)
     return M

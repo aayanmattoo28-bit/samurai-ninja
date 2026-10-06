@@ -167,7 +167,10 @@ def main():
     text_c(d, (480 * K, 1499 * K), "“THE SHADOW DOES NOT SEEK GLORY, ONLY COMPLETION.”", latin(12 * K),
            (150, 142, 132), spacing=3 * K)
     seal(d, 822 * K, 1499 * K, 9 * K, "衆")
-    img.save(o["out"], optimize=True)
+    if o["out"].lower().endswith((".jpg", ".jpeg")):
+        img.save(o["out"], quality=92, optimize=True, progressive=True)
+    else:
+        img.save(o["out"], optimize=True)
     print("wrote", o["out"], img.size)
 
 
