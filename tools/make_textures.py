@@ -435,12 +435,12 @@ def make_banner(W=512, H=2048):
     d = ImageDraw.Draw(im)
     crest = Image.open(os.path.join(OUT, "mon_bird.png")).resize((int(W * 0.80), int(W * 0.80)), Image.LANCZOS)
     crest = crest.point(lambda v: min(255, int(v * 1.6)))
-    im.paste(crest, (int(W * 0.10), int(H * 0.12)))
-    y = H * 0.44
+    im.paste(crest, (int(W * 0.10), int(H * 0.27)))
+    y = H * 0.58
     for ch in "影武者":
         g = glyph(ch, int(W * 0.48))
         paste_center(im, g, W * 0.5, y)
-        y += W * 0.58
+        y += W * 0.50
     # side rule lines
     d.line([18, 0, 18, H], fill=255, width=6)
     d.line([W - 18, 0, W - 18, H], fill=255, width=6)
@@ -557,6 +557,9 @@ def make_hat(W=2048, H=512):
 # ----------------------------------------------------------------------------
 def make_bracer(W=256, H=1024):
     im = Image.new("L", (W, H), 0)
+    fil = Image.open(os.path.join(OUT, "filigree.png")).resize((W, W))
+    for yy in range(0, H, W):
+        im.paste(fil.point(lambda v: int(v * 0.8)), (0, yy))
     d = ImageDraw.Draw(im)
     d.rectangle([8, 8, W - 8, H - 8], outline=255, width=7)
     d.rectangle([22, 22, W - 22, H - 22], outline=255, width=2)
@@ -699,6 +702,6 @@ if __name__ == "__main__":
     make_lamellar()
     make_smokebomb()
     make_hat()
-    make_bracer()
+    make_bracer()  # needs filigree.png
     make_suneate()  # needs filigree.png (generated first)
     make_pouch()

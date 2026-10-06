@@ -201,7 +201,7 @@ def build_head(coll, parent):
         n = V((math.sin(th), -math.cos(th), 0))
         w = 0.0030 * math.sin(z * 240.0 + abs(math.sin(th)) * 40) * front ** 2 * clamp((1.733 - z) / 0.04)
         w += 0.0025 * math.sin(z * 150.0 - abs(math.sin(th)) * 25 + th) * (1 - front) * clamp((1.80 - z) / 0.1)
-        w += 0.0035 * fbm(p * 18)
+        w += 0.0035 * fbm(p * 18) + 0.0018 * fbm(p * 55 + V((3, 1, 0)))
         # rolled cloth edges around the opening (mask top edge + hood front edge)
         if front > 0.5:
             k = (front - 0.5) / 0.5
@@ -243,7 +243,7 @@ def build_head(coll, parent):
         roll += 0.008 * (0.5 - 0.5 * math.cos(TAU * s2)) ** 1.5 * v
         crease = 0.005 * math.sin(th * 5 + v * 9) * v + 0.002 * math.sin(th * 13 - v * 11)
         p = V((x, y, z))
-        p += radial * (roll + crease + 0.006 * fbm(p * 14))
+        p += radial * (roll + crease + 0.006 * fbm(p * 14) + 0.0025 * fbm(p * 48 + V((5, 0, 2))))
         p.z += 0.006 * math.sin(th * 5 + v * 4)
         return p
 
@@ -280,7 +280,7 @@ def build_head(coll, parent):
         p = torso_pt(th, z, off)
         radial = V((math.sin(th), -math.cos(th), 0))
         fold = 0.012 * math.sin(th * 9 + 0.6) * v + 0.008 * math.sin(th * 17) * v ** 2
-        p += radial * (fold + 0.004 * fbm(p * 15))
+        p += radial * (fold + 0.004 * fbm(p * 15) + 0.002 * fbm(p * 50))
         return p
 
     md = grid(shawl, lin(0, TAU, 96), lin(0, 1, 14), closed_u=True)

@@ -338,7 +338,7 @@ def build_sode(coll, root):
         yl = zl.cross(xl)
         rot = Matrix((xl, yl, zl)).transposed().to_4x4()
         tiltm = Matrix.Rotation(-tilt * side, 4, "Y")
-        turn = Matrix.Rotation(-deg(12) * side, 4, "Z")
+        turn = Matrix.Rotation(-deg(26) * side, 4, "Z")
         mw = Matrix.Translation(origin) @ turn @ tiltm @ rot
         plates = {"lacquer": MD(), "dragon": MD(), "lamellar": MD()}
         gold = MD()
@@ -641,7 +641,7 @@ def build_arms(coll, root):
     tekko.add(FINGER_PLATES.copy().transform(mh))
     tekko_gold.add(ptrim.transform(mh))
 
-    for name, md, mat, sub in (("Arm_Sleeves", sleeve, M["cloth"], 2), ("Arm_Forearm_Sleeves", forearm, M["cloth"], 1),
+    for name, md, mat, sub in (("Arm_Sleeves", sleeve, M["cloth_sleeve"], 2), ("Arm_Forearm_Sleeves", forearm, M["cloth"], 1),
                                ("Kote_Bracers", bracer, M["lacquer_bracer"], 2), ("Kote_Gold", gold, M["gold"], 0),
                                ("Kote_Straps", straps, M["leather"], 1), ("Kote_Elbow_Cops", cop, M["lacquer"], 2),
                                ("Gloves", glove, M["leather_dark"], 2), ("Gloves_Tekko", tekko, M["lacquer"], 1),
@@ -724,7 +724,11 @@ def build_legs(coll, root):
         folds = 0.014 * math.sin(th * 4 + t * 9) * t + 0.008 * math.sin(th * 7 - t * 15) + \
             0.006 * math.sin(t * 50 + th) * smooth((t - 0.55) / 0.3) + \
             0.004 * math.sin(th * 11 + t * 31) * (0.3 + t) + 0.003 * math.sin(th * 17 - t * 45)
-        return base + folds
+        folds += 0.005 * fbm(V((math.cos(th) * 2.5, math.sin(th) * 2.5, t * 9))) + \
+            0.0022 * fbm(V((math.cos(th) * 8, math.sin(th) * 8, t * 30)))
+        # slimmer front-to-back than side-to-side (th = 0 points forward)
+        squash = 1.0 - 0.20 * math.cos(th) ** 2 * smooth((t - 0.1) / 0.3)
+        return (base + folds) * squash
 
     pants.add(limb(path, r_pant, 36, nt=40, ref=(0, -1, 0)))
 
@@ -846,7 +850,7 @@ def build_legs(coll, root):
     def sole_fn(u, v, i, j):
         p = boot_pt(v, u, 0.008)
         q = V((p.x, p.y, 0.0))
-        return q + V((0, 0, 0.0 if math.sin(u) < 0 else 0.022))
+        return q + V((0, 0, 0.0 if math.sin(u) < 0 else 0.015))
 
     F, Sd = foot_frame()
     outline = [boot_pt(s, 0, 0.007) for s in lin(-0.088, 0.216, 20)] + \
@@ -854,7 +858,7 @@ def build_legs(coll, root):
     outline = [V((p.x, p.y, 0.0)) for p in outline]
     c = sum(outline, V()) / len(outline)
     sole = MD()
-    for z0, z1 in ((0.0, 0.022),):
+    for z0, z1 in ((0.0, 0.015),):
         top = [p + V((0, 0, z1)) for p in outline]
         bot = [p + V((0, 0, z0)) for p in outline]
         n = len(outline)
@@ -889,13 +893,29 @@ def build_legs(coll, root):
         heel = boot_pt(-0.07, deg(90 - sgn * 70), 0.004)
         cords_dark.add(tube(catmull_path([toe, boot_pt(0.11, deg(90 - sgn * 45), 0.006), sidept,
                                           boot_pt(-0.01, deg(90 - sgn * 80), 0.005), heel], 4), 0.0035, 6))
-    # cloth wraps around the instep and ankle (kyahan ties over the boot)
-    wraps = MD()
-    for sc_, w_ in ((0.020, 0.020), (0.065, 0.016), (-0.040, 0.022)):
-        ring = [boot_pt(sc_, ph, 0.004) for ph in lin(0, TAU, 33)[:-1]]
-        wraps.add(sweep(ring, rect_profile(0.004, w_, 1), closed_path=True,
-                        up=lambda i, p, c=boot_center(sc_): p - c))
-    cords_dark.add(wraps)
+    # leather straps with gilt buckles around the instep and heel
+    straps_b = MD()
+    for sc_, w_ in ((0.012, 0.022), (0.085, 0.018), (-0.045, 0.024)):
+        ring = [boot_pt(sc_, ph, 0.005) for ph in lin(0, TAU, 33)[:-1]]
+        straps_b.add(sweep(ring, rect_profile(0.0045, w_, 1), closed_path=True,
+                           up=lambda i, p, c=boot_center(sc_): p - c))
+        bp = boot_pt(sc_, deg(20), 0.009)
+        n_ = (bp - boot_center(sc_)).normalized()
+        bk = box(0.006, 0.020, w_ + 0.006)
+        bk.transform(look_matrix(bp, n_, (0, 0, 1)))
+        gold.add(bk)
+        for ph in (deg(60), deg(100), deg(140)):
+            st = uv_sphere(0.0028, 8, 5)
+            st.translate(boot_pt(sc_, ph, 0.0095))
+            gold.add(st)
+    # lacquered toe cap
+    def toe_fn(u, v, i, j):
+        sx = lerp(0.150, 0.214, v)
+        phi = lerp(deg(15), deg(165), u)
+        return boot_pt(sx, phi, 0.005)
+
+    kogake.add(grid(toe_fn, lin(0, 1, 14), lin(0, 1, 6)))
+    gold.add(tube([toe_fn(q / 14, 0.0, 0, 0) for q in range(15)], 0.0024, 6))
     for name, md, mat, sub, solid in (
             ("Pants_Hakama", pants, M["cloth_pants"], 2, 0), ("Gaiters_Kyahan", gaiter, M["cloth"], 1, 0),
             ("Suneate_Chainmail", mail, M["mail"], 0, 0), ("Suneate_Borders", gold_dk, M["gold_dark"], 0, 0),
@@ -903,7 +923,7 @@ def build_legs(coll, root):
             ("Leg_Red_Ties", red, M["cord_red"], 0, 0), ("Knee_Plates", kneep, M["lacquer"], 1, 0.004),
             ("Boots", boots, M["boot"], 2, 0), ("Sandal_Soles", soles, M["straw"], 0, 0),
             ("Kogake_Foot_Plates", kogake, M["lacquer"], 1, 0.003), ("Sandal_Cords", cords_dark, M["cord_dark"], 0, 0),
-            ("Shin_Tatters", tatters, M["cloth"], 1, 0.002)):
+            ("Shin_Tatters", tatters, M["cloth"], 1, 0.002), ("Boot_Straps", straps_b, M["leather"], 1, 0)):
         ob = to_obj(name, both(md), mat, coll, parent=root)
         if solid:
             mod_solidify(ob, solid, -1.0)

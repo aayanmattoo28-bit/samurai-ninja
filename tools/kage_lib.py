@@ -821,7 +821,7 @@ def mat_gold(name="Gold_Trim", tint=(0.78, 0.53, 0.22), rough=0.3, tarnish=0.4):
 
 def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.62, 0.42, 0.18),
                 base=(0.010, 0.009, 0.009), wear=0.35, relief=0.35, pattern_rot=0.0, extension="REPEAT",
-                flip_u=False, straw=False, dust=0.25):
+                flip_u=False, straw=False, dust=0.25, coat=0.30):
     """Black urushi lacquer with optional gilded pattern mask."""
     m = new_mat(name)
     nb = NB(m)
@@ -833,11 +833,15 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
     basecol = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.3, 0.0), (0.8, 1.0)]), base, (0.035, 0.026, 0.020))
     dustmask = nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.55, 0.0), (0.8, 1.0)]), dust)
     basecol = nb.mix(dustmask, basecol, (0.10, 0.085, 0.07))
-    rough = nb.mixf(dustmask, nb.math("ADD", nb.math("MULTIPLY", n1.outputs["Fac"], 0.25), 0.18), 0.8)
+    rough = nb.mixf(dustmask, nb.math("ADD", nb.math("MULTIPLY", n1.outputs["Fac"], 0.22), 0.34), 0.85)
     # scratches
-    sc = nb.noise(nb.mapping(obj, (60, 6, 60)), 1.0, 2, 0.5)
-    scratch = nb.ramp(sc.outputs["Fac"], [(0.48, 0.0), (0.5, 1.0), (0.52, 0.0)])
-    height = nb.math("MULTIPLY", scratch, 0.15)
+    sc = nb.noise(nb.mapping(obj, (90, 7, 90)), 1.0, 3, 0.5)
+    scratch = nb.ramp(sc.outputs["Fac"], [(0.485, 0.0), (0.5, 1.0), (0.515, 0.0)])
+    sc2 = nb.noise(nb.mapping(obj, (8, 70, 70)), 1.0, 3, 0.5)
+    scratch = nb.math("MAXIMUM", scratch, nb.ramp(sc2.outputs["Fac"], [(0.49, 0.0), (0.5, 0.7), (0.51, 0.0)]))
+    basecol = nb.mix(nb.math("MULTIPLY", scratch, 0.5), basecol, (0.06, 0.05, 0.045))
+    rough = nb.mixf(scratch, rough, 0.6)
+    height = nb.math("MULTIPLY", scratch, -0.35)
     if straw:
         # woven straw: concentric + radial fine ridges
         w1 = nb.n("ShaderNodeTexWave", (-900, -500), wave_type="RINGS", rings_direction="Z")
@@ -851,21 +855,35 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         w2.inputs["Distortion"].default_value = 0.5
         nb.link(obj, w2.inputs["Vector"])
         band = nb.ramp(w2.outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)])
-        basecol = nb.mix(band, basecol, (0.034, 0.024, 0.016))
+        basecol = nb.mix(band, basecol, (0.024, 0.018, 0.013))
         height = nb.math("ADD", height, nb.math("MULTIPLY", band, 0.8))
     # realism: dust packed into crevices, worn brown edges, dust settled on upward faces
     crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.025))
     basecol = nb.mix(nb.math("MULTIPLY", crev, 0.9), basecol, (0.050, 0.043, 0.036))
     rough = nb.mixf(crev, rough, 0.75)
     en = nb.noise(obj, 35.0, 4, 0.6)
-    edge = nb.math("MULTIPLY", _edges(nb), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.6, 1.0)]))
-    basecol = nb.mix(nb.math("MULTIPLY", edge, 0.75), basecol, (0.080, 0.048, 0.030))
+    edge = nb.math("MULTIPLY", _edges(nb, 0.50, 0.535), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.55, 1.0)]))
+    basecol = nb.mix(nb.math("MULTIPLY", edge, 0.55), basecol, (0.11, 0.032, 0.017))
     upd = nb.math("MULTIPLY", _updust(nb, obj), dust * 1.3)
     basecol = nb.mix(upd, basecol, (0.115, 0.098, 0.082))
     rough = nb.mixf(upd, rough, 0.85)
-    lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=0.45,
-                         Coat_Roughness=0.14, Specular_IOR_Level=0.5)
-    nb.link(nb.math("SUBTRACT", 0.45, nb.math("MULTIPLY", nb.math("MAXIMUM", upd, crev), 0.45)),
+    if straw:
+        rough = nb.math("ADD", nb.math("MULTIPLY", rough, 0.5), 0.35)
+        sepw = nb.n("ShaderNodeSeparateXYZ", (-1100, -900))
+        nb.link(tc.outputs["UV"], sepw.inputs[0])
+        fu = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[0], 240.0))
+        fv = nb.math("FRACT", nb.math("MULTIPLY", sepw.outputs[1], 46.0))
+        cu = nb.math("GREATER_THAN", fu, 0.5)
+        cv = nb.math("GREATER_THAN", fv, 0.5)
+        chk = nb.math("ABSOLUTE", nb.math("SUBTRACT", cu, cv))
+        strand = nb.math("MULTIPLY", nb.math("SINE", nb.math("MULTIPLY", fu, 3.14159)),
+                         nb.math("SINE", nb.math("MULTIPLY", fv, 3.14159)))
+        weave_h = nb.math("ADD", nb.math("MULTIPLY", chk, 0.6), nb.math("MULTIPLY", strand, 0.6))
+        basecol = nb.mix(nb.math("MULTIPLY", chk, 0.6), basecol, (0.045, 0.032, 0.020))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", weave_h, 1.2))
+    lacq = nb.principled((200, 200), Base_Color=basecol, Roughness=rough, Coat_Weight=coat,
+                         Coat_Roughness=0.22, Specular_IOR_Level=0.32)
+    nb.link(nb.math("SUBTRACT", coat, nb.math("MULTIPLY", nb.math("MAXIMUM", upd, crev), coat)),
             lacq.inputs["Coat Weight"])
     shader = lacq.outputs[0]
     if pattern:
@@ -888,10 +906,12 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
         nb.link(shader, mixs.inputs[1])
         nb.link(gold.outputs[0], mixs.inputs[2])
         shader = mixs.outputs[0]
-        height = nb.math("ADD", height, nb.math("MULTIPLY", mask, relief * 10))
+        height = nb.math("ADD", height, nb.math("MULTIPLY", mask, relief * 14))
+        eng = nb.noise(obj, 260.0, 2, 0.5)
+        height = nb.math("ADD", height, nb.math("MULTIPLY", nb.math("MULTIPLY", eng.outputs["Fac"], mask), 0.8))
     bmp = nb.bump(height, 0.25, 0.0004)
     if pattern:
-        bmp = nb.bump(height, 0.35, 0.0008)
+        bmp = nb.bump(height, 0.45, 0.0010)
     nb.link(bmp, lacq.inputs["Normal"])
     if pattern:
         nb.link(bmp, gold.inputs["Normal"])
@@ -901,9 +921,9 @@ def mat_lacquer(name, pattern=None, uv_scale=(1, 1), mapping="UV", gold_tint=(0.
     return m
 
 
-def mat_cloth(name, base=(0.016, 0.014, 0.014), print_img=None, print_scale=(1, 1), print_col=(0.30, 0.20, 0.09),
-              print_strength=0.7, mapping="UV", extension="REPEAT", fade=(0.03, 0.026, 0.024), dust=0.35,
-              sheen=0.18, weave=220.0, print_metal=0.25):
+def mat_cloth(name, base=(0.012, 0.0115, 0.0115), print_img=None, print_scale=(1, 1), print_col=(0.30, 0.20, 0.09),
+              print_strength=0.7, mapping="UV", extension="REPEAT", fade=(0.026, 0.024, 0.023), dust=0.35,
+              sheen=0.18, weave=220.0, print_metal=0.25, fray=0.0):
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
@@ -929,6 +949,10 @@ def mat_cloth(name, base=(0.016, 0.014, 0.014), print_img=None, print_scale=(1, 
         col = nb.mix(pmask, col, print_col)
         rough = nb.mixf(pmask, 0.88, 0.55)
         metal = nb.mixf(pmask, 0.0, print_metal)
+    # faded / sun-bleached patches
+    fp = nb.noise(obj, 1.8, 5, 0.6)
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(fp.outputs["Fac"], [(0.55, 0.0), (0.75, 1.0)]), 0.6), col,
+                 (0.045, 0.034, 0.028))
     # realism: deep shadow in folds (AO), dust on the lower hems and upward faces
     ao = _ao(nb, 0.05)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.004, 0.0035, 0.003))
@@ -951,9 +975,35 @@ def mat_cloth(name, base=(0.016, 0.014, 0.014), print_img=None, print_scale=(1, 
     fold = nb.noise(obj, 25.0, 4, 0.5)
     h = nb.math("ADD", h, nb.math("MULTIPLY", fold.outputs["Fac"], 1.5))
     bmp = nb.bump(h, 0.30, 0.0006)
-    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=max(sheen, 0.3),
-                      Sheen_Roughness=0.5, Normal=bmp)
-    nb.output(p.outputs[0])
+    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal, Sheen_Weight=0.14,
+                      Sheen_Roughness=0.55, Sheen_Tint=(0.45, 0.42, 0.40), Normal=bmp)
+    shader = p.outputs[0]
+    if fray > 0:
+        # frayed hem: loose vertical threads and holes near uv v = 0 (the bottom edge of hanging panels)
+        sepu = nb.n("ShaderNodeSeparateXYZ", (-1000, -1400))
+        nb.link(tc.outputs["UV"], sepu.inputs[0])
+        thr = nb.noise(nb.mapping(tc.outputs["UV"], (420.0, 6.0, 1.0)), 1.0, 2, 0.5)
+        holes = nb.noise(obj, 22.0, 4, 0.6)
+        depth = nb.n("ShaderNodeMapRange", (-600, -1400))
+        nb.link(sepu.outputs[1], depth.inputs["Value"])
+        depth.inputs["From Min"].default_value = 0.0
+        depth.inputs["From Max"].default_value = fray
+        depth.inputs["To Min"].default_value = 0.70
+        depth.inputs["To Max"].default_value = 0.0
+        cut = nb.math("ADD", nb.math("MULTIPLY", thr.outputs["Fac"], 0.8),
+                      nb.math("MULTIPLY", holes.outputs["Fac"], 0.35))
+        alpha = nb.math("GREATER_THAN", cut, nb.math("ADD", depth.outputs[0], 0.18))
+        tr = nb.n("ShaderNodeBsdfTransparent", (200, -400))
+        mx = nb.n("ShaderNodeMixShader", (450, 0))
+        nb.link(alpha, mx.inputs[0])
+        nb.link(tr.outputs[0], mx.inputs[1])
+        nb.link(shader, mx.inputs[2])
+        shader = mx.outputs[0]
+        try:
+            m.surface_render_method = "DITHERED"
+        except Exception:
+            pass
+    nb.output(shader)
     m.diffuse_color = (*base, 1)
     return m
 
@@ -977,8 +1027,8 @@ def mat_simple(name, base, rough=0.5, metal=0.0, coat=0.0, sheen=0.0, bump_scale
     col = nb.mix(nb.math("MULTIPLY", crev, 0.8), col, (0.02, 0.016, 0.013))
     if dirt:
         en = nb.noise(obj, 40.0, 4, 0.6)
-        edge = nb.math("MULTIPLY", _edges(nb), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.6, 1.0)]))
-        col = nb.mix(nb.math("MULTIPLY", edge, 0.5 * min(1.0, dirt * 2)), col, (0.16, 0.12, 0.09))
+        edge = nb.math("MULTIPLY", _edges(nb, 0.53, 0.58), nb.ramp(en.outputs["Fac"], [(0.45, 0.0), (0.65, 1.0)]))
+        col = nb.mix(nb.math("MULTIPLY", edge, 0.3 * min(1.0, dirt * 2)), col, (0.10, 0.075, 0.055))
     rough = nb.mixf(crev, rough, min(1.0, rough + 0.3))
     n2 = nb.noise(obj, bump_scale, 6, 0.6)
     h = n2.outputs["Fac"]
@@ -1070,7 +1120,7 @@ def mat_tsuka(name="Tsuka_Wrap", ito=(0.012, 0.011, 0.011), same=(0.45, 0.06, 0.
     col = nb.mix(diamond, ito, same)
     n = nb.noise(tc.outputs["Object"], 400.0, 3, 0.5)
     h = nb.math("ADD", nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, diamond), 1.0), nb.math("MULTIPLY", n.outputs["Fac"], 0.2))
-    p = nb.principled(Base_Color=col, Roughness=nb.mixf(diamond, 0.55, 0.35), Sheen_Weight=0.4,
+    p = nb.principled(Base_Color=col, Roughness=nb.mixf(diamond, 0.62, 0.38), Sheen_Weight=0.08,
                       Normal=nb.bump(h, 0.6, 0.001))
     nb.output(p.outputs[0])
     return m
@@ -1093,4 +1143,52 @@ def mat_mail(name="Chainmail_Iron"):
     p = nb.principled(Base_Color=col, Metallic=nb.mixf(ring, 0.0, 0.9), Roughness=0.45,
                       Normal=nb.bump(ring, 0.8, 0.002))
     nb.output(p.outputs[0])
+    return m
+
+
+def mat_leather_tooled(name="Leather_Pouch_Tooled", base=(0.055, 0.027, 0.013), light=(0.12, 0.062, 0.03)):
+    """Worn brown leather with stitched borders + tooled motif (pouch_tooling.png on each face's UV)."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    it = nb.img("pouch_tooling.png", tc.outputs["UV"], "CLIP")
+    tool = it.outputs["Color"]
+    n1 = nb.noise(obj, 9.0, 8, 0.6)
+    col = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.3, 0.0), (0.75, 1.0)]), base, light)
+    vor = nb.n("ShaderNodeTexVoronoi", (-900, -300), feature="DISTANCE_TO_EDGE")
+    vor.inputs["Scale"].default_value = 140.0
+    nb.link(obj, vor.inputs["Vector"])
+    grain = nb.ramp(vor.outputs["Distance"], [(0.0, 0.0), (0.08, 1.0)])
+    crev = nb.math("SUBTRACT", 1.0, _ao(nb, 0.015))
+    col = nb.mix(nb.math("MULTIPLY", crev, 0.8), col, (0.018, 0.010, 0.006))
+    en = nb.noise(obj, 30.0, 4, 0.6)
+    edge = nb.math("MULTIPLY", _edges(nb), nb.ramp(en.outputs["Fac"], [(0.35, 0.0), (0.6, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", edge, 0.8), col, (0.20, 0.13, 0.08))
+    col = nb.mix(nb.math("MULTIPLY", tool, 0.7), col, (0.025, 0.013, 0.007))
+    h = nb.math("ADD", nb.math("MULTIPLY", grain, 0.3), nb.math("MULTIPLY", tool, -1.0))
+    wr = nb.noise(obj, 35.0, 5, 0.6)
+    h = nb.math("ADD", h, nb.math("MULTIPLY", wr.outputs["Fac"], 0.8))
+    p = nb.principled(Base_Color=col, Roughness=nb.mixf(edge, 0.62, 0.35), Coat_Weight=0.08,
+                      Normal=nb.bump(h, 0.45, 0.0015))
+    nb.output(p.outputs[0])
+    m.diffuse_color = (*base, 1)
+    return m
+
+
+def mat_metal_engraved(name, tint=(0.36, 0.22, 0.10), img="filigree.png", uv_scale=(3.0, 2.0), rough=0.38):
+    """Cast bronze / brass with engraved scrollwork: dark patina packed in the engraving."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    it = nb.img(img, nb.mapping(tc.outputs["UV"], (uv_scale[0], uv_scale[1], 1)), "REPEAT")
+    eng = it.outputs["Color"]
+    g = _gold_shader(nb, obj, tint, rough, 0.6, 22.0)
+    col_in = g.inputs["Base Color"].links[0].from_socket
+    col = nb.mix(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, eng), 0.65), col_in, (0.04, 0.025, 0.012))
+    nb.link(col, g.inputs["Base Color"])
+    nb.link(nb.bump(eng, 0.5, 0.0012), g.inputs["Normal"])
+    nb.output(g.outputs[0])
+    m.diffuse_color = (*tint, 1)
     return m

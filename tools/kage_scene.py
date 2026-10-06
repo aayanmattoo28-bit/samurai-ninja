@@ -10,21 +10,22 @@ from kage_mats import M
 
 # view name -> (camera location, rotation (deg), light-rig z rotation)
 TURNAROUND = {
-    "Front": ((0.0, -9.0, 1.0), (90, 0, 0), 0),
-    "Left": ((9.0, 0.0, 1.0), (90, 0, 90), 90),
-    "Right": ((-9.0, 0.0, 1.0), (90, 0, -90), -90),
-    "Back": ((0.0, 9.0, 1.0), (90, 0, 180), 180),
+    "Front": ((0.0, -6.3, 1.0), (90, 0, 0), 0),
+    "Left": ((6.3, 0.0, 1.0), (90, 0, 90), 90),
+    "Right": ((-6.3, 0.0, 1.0), (90, 0, -90), -90),
+    "Back": ((0.0, 6.3, 1.0), (90, 0, 180), 180),
 }
+TURN_FOCAL = 70
 
 # detail cameras: name -> (location, target, focal mm)
 DETAILS = {
-    "FrontWaist": ((0.05, -1.25, 1.05), (0.0, -0.1, 1.04), 50),
-    "BackWaist": ((0.05, 1.25, 1.00), (0.0, 0.1, 0.96), 50),
-    "Kasa": ((-0.55, -0.85, 1.95), (0.0, 0.0, 1.78), 50),
+    "FrontWaist": ((-0.02, -1.15, 1.10), (-0.02, -0.1, 1.00), 50),
+    "BackWaist": ((0.04, 1.15, 1.02), (0.04, 0.1, 0.94), 50),
+    "Kasa": ((-0.42, -0.62, 1.93), (0.0, 0.0, 1.80), 50),
     "Mask": ((-0.18, -0.62, 1.74), (0.0, 0.0, 1.70), 50),
     "Armor": ((0.85, -0.25, 1.40), (0.30, 0.0, 1.40), 50),
-    "Fabric": ((0.0, 1.0, 1.20), (0.0, 0.15, 1.10), 50),
-    "LegArmor": ((0.70, -0.85, 0.40), (0.24, 0.0, 0.30), 50),
+    "Fabric": ((-0.07, 0.80, 1.27), (-0.075, 0.20, 1.24), 50),
+    "LegArmor": ((0.48, -0.78, 0.34), (0.24, -0.02, 0.24), 50),
 }
 
 
@@ -50,7 +51,11 @@ def setup_render(sc):
         sc.view_settings.look = "AgX - Medium High Contrast"
     except Exception:
         pass
-    sc.view_settings.exposure = 0.0
+    sc.view_settings.exposure = 0.05
+    try:
+        compositor(sc)
+    except Exception as e:  # compositor is a finishing touch only
+        print("compositor setup skipped:", e)
     # EEVEE settings (for viewport / quick renders)
     try:
         ee = sc.eevee
@@ -58,6 +63,52 @@ def setup_render(sc):
         ee.use_raytracing = True
     except Exception:
         pass
+
+
+def compositor(sc):
+    """Camera-like finish: soft highlight bloom, gentle grade, saturation and a vignette."""
+    sc.use_nodes = True
+    nt = sc.node_tree
+    for n in list(nt.nodes):
+        nt.nodes.remove(n)
+    L = nt.links.new
+    rl = nt.nodes.new("CompositorNodeRLayers")
+    gl = nt.nodes.new("CompositorNodeGlare")
+    gl.glare_type = "FOG_GLOW"
+    gl.quality = "MEDIUM"
+    gl.threshold = 0.85
+    gl.size = 7
+    gl.mix = -0.82
+    cb = nt.nodes.new("CompositorNodeColorBalance")
+    cb.correction_method = "LIFT_GAMMA_GAIN"
+    cb.lift = (0.985, 0.985, 1.0)
+    cb.gamma = (1.0, 0.995, 0.99)
+    cb.gain = (1.0, 0.99, 1.0)
+    hs = nt.nodes.new("CompositorNodeHueSat")
+    hs.inputs["Saturation"].default_value = 1.04
+    em = nt.nodes.new("CompositorNodeEllipseMask")
+    em.width = 0.98
+    em.height = 0.98
+    bl = nt.nodes.new("CompositorNodeBlur")
+    bl.filter_type = "FAST_GAUSS"
+    bl.use_relative = True
+    bl.factor_x = 30
+    bl.factor_y = 30
+    vg = nt.nodes.new("CompositorNodeMapRange")
+    vg.inputs["To Min"].default_value = 0.74
+    vg.inputs["To Max"].default_value = 1.0
+    mul = nt.nodes.new("CompositorNodeMixRGB")
+    mul.blend_type = "MULTIPLY"
+    mul.inputs["Fac"].default_value = 1.0
+    comp = nt.nodes.new("CompositorNodeComposite")
+    L(rl.outputs["Image"], gl.inputs["Image"])
+    L(gl.outputs["Image"], cb.inputs["Image"])
+    L(cb.outputs["Image"], hs.inputs["Image"])
+    L(em.outputs["Mask"], bl.inputs["Image"])
+    L(bl.outputs["Image"], vg.inputs["Value"])
+    L(hs.outputs["Image"], mul.inputs[1])
+    L(vg.outputs["Value"], mul.inputs[2])
+    L(mul.outputs["Image"], comp.inputs["Image"])
 
 
 def world(sc):
@@ -106,19 +157,19 @@ def build_lights(sc):
     rig.empty_display_size = 1.0
     c = (0, 0, 1.1)
     area("Key_Warm", coll, (-3.2, -4.5, 4.2), c, 220, (1.0, 0.80, 0.60), 3.0, rig)
-    area("Fill_Cool", coll, (3.8, -3.6, 1.8), c, 70, (0.62, 0.62, 0.90), 3.0, rig)
-    area("Rim_Orange_L", coll, (-3.0, 3.8, 2.8), c, 380, (1.0, 0.52, 0.28), 2.0, rig)
-    area("Rim_Red_R", coll, (3.2, 3.5, 2.2), c, 260, (1.0, 0.38, 0.25), 2.0, rig)
+    area("Fill_Cool", coll, (3.8, -3.6, 1.8), c, 95, (0.62, 0.62, 0.90), 3.0, rig)
+    area("Rim_Orange_L", coll, (-3.0, 3.8, 2.8), c, 520, (1.0, 0.64, 0.42), 2.0, rig)
+    area("Rim_Red_R", coll, (3.2, 3.5, 2.2), c, 300, (1.0, 0.52, 0.40), 2.0, rig)
     area("Face_Fill", coll, (0.4, -2.2, 1.55), (0, 0, 1.72), 7, (1.0, 0.82, 0.68), 0.6, rig)
     area("Top_Kasa", coll, (0.0, -1.0, 4.5), (0, 0, 1.8), 25, (1.0, 0.85, 0.7), 1.2, rig)
     area("Low_Bounce", coll, (0.0, -3.0, 0.2), (0, 0, 0.6), 12, (0.8, 0.6, 0.5), 3.0, rig)
     sun = bpy.data.lights.new("Sun_Low", "SUN")
-    sun.energy = 1.6
-    sun.color = (1.0, 0.70, 0.45)
+    sun.energy = 3.0
+    sun.color = (1.0, 0.86, 0.72)
     sun.angle = math.radians(3)
     so = bpy.data.objects.new("Sun_Low", sun)
     coll.objects.link(so)
-    so.rotation_euler = Euler((math.radians(70), 0, math.radians(-140)))
+    so.rotation_euler = Euler((math.radians(62), 0, math.radians(-115)))
     so.parent = rig
     return rig
 
@@ -145,9 +196,9 @@ def build_cameras(sc):
     coll = collection("Cameras")
     first = None
     for name, (loc, rot, _) in TURNAROUND.items():
-        cam = make_camera("CAM_" + name, coll, loc, rot=rot, focal=100)
+        cam = make_camera("CAM_" + name, coll, loc, rot=rot, focal=TURN_FOCAL)
         cam.data.dof.use_dof = True
-        cam.data.dof.focus_distance = 9.0
+        cam.data.dof.focus_distance = 6.3
         cam.data.dof.aperture_fstop = 8.0
         first = first or cam
     for name, (loc, tgt, f) in DETAILS.items():
@@ -178,8 +229,8 @@ def mat_stone(name="Stone_Courtyard"):
     br.inputs["Bias"].default_value = 0.0
     br.inputs["Brick Width"].default_value = 0.95
     br.inputs["Row Height"].default_value = 0.62
-    br.inputs["Color1"].default_value = (0.13, 0.125, 0.12, 1)
-    br.inputs["Color2"].default_value = (0.09, 0.085, 0.082, 1)
+    br.inputs["Color1"].default_value = (0.085, 0.083, 0.082, 1)
+    br.inputs["Color2"].default_value = (0.060, 0.058, 0.058, 1)
     br.inputs["Mortar"].default_value = (0.0, 0.0, 0.0, 1)
     dn = nb.noise(obj, 4.0, 4, 0.5)
     warped = nb.n("ShaderNodeVectorMath", (-1100, 200))
@@ -197,7 +248,7 @@ def mat_stone(name="Stone_Courtyard"):
     cr = nb.noise(obj, 6.0, 12, 0.75, distortion=0.6)
     crack = nb.ramp(cr.outputs["Fac"], [(0.495, 0.0), (0.5, 1.0), (0.505, 0.0)])
     col = nb.mix(nb.math("MAXIMUM", mortar, nb.math("MULTIPLY", crack, 0.7)), base, (0.015, 0.013, 0.012))
-    wet = nb.ramp(nb.noise(obj, 0.7, 4, 0.5).outputs["Fac"], [(0.56, 0.0), (0.62, 1.0)])
+    wet = nb.ramp(nb.noise(obj, 0.7, 4, 0.5).outputs["Fac"], [(0.50, 0.0), (0.58, 1.0)])
     col = nb.mix(nb.math("MULTIPLY", wet, 0.5), col, (0.03, 0.028, 0.027))
     rough = nb.mixf(wet, 0.72, 0.12)
     grit = nb.noise(obj, 60.0, 8, 0.7)
@@ -208,7 +259,7 @@ def mat_stone(name="Stone_Courtyard"):
     return m
 
 
-def fog_wrap(mat, fog_col=(0.22, 0.18, 0.24), near=30.0, far=260.0, max_fac=0.45):
+def fog_wrap(mat, fog_col=(0.36, 0.30, 0.32), near=40.0, far=420.0, max_fac=0.28):
     """Blend a material's surface toward a haze colour with camera distance (aerial perspective)."""
     nt = mat.node_tree
     out = [n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"][0]
@@ -237,9 +288,9 @@ def mat_foliage(name):
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
     vor = nb.n("ShaderNodeTexVoronoi", (-900, 200), feature="F1")
-    vor.inputs["Scale"].default_value = 9.0
+    vor.inputs["Scale"].default_value = 3.2
     nb.link(obj, vor.inputs["Vector"])
-    leafmask = nb.ramp(vor.outputs["Distance"], [(0.30, 1.0), (0.42, 0.0)])
+    leafmask = nb.ramp(vor.outputs["Distance"], [(0.52, 1.0), (0.62, 0.0)])
     n = nb.noise(obj, 0.8, 6, 0.6)
     col = nb.ramp(n.outputs["Fac"], [(0.30, (0.20, 0.012, 0.008)), (0.50, (0.48, 0.05, 0.015)),
                                      (0.70, (0.70, 0.17, 0.03)), (0.85, (0.55, 0.30, 0.06))])
@@ -257,7 +308,7 @@ def mat_foliage(name):
 def build_environment(sc):
     coll = collection("Environment_Courtyard")
     stone = fog_wrap(mat_stone())
-    plaster = fog_wrap(mat_simple("Castle_Plaster", (0.50, 0.47, 0.44), rough=0.8, var_col=(0.30, 0.28, 0.26),
+    plaster = fog_wrap(mat_simple("Castle_Plaster", (0.72, 0.66, 0.60), rough=0.8, var_col=(0.50, 0.45, 0.40),
                                   dirt=0.4))
     roof = fog_wrap(mat_simple("Castle_Roof_Tiles", (0.012, 0.014, 0.018), rough=0.45, metal=0.2, wave="BANDS",
                                wave_dir="X", wave_coord="Object", wave_scale=25.0, wave_str=1.0, bump_str=0.8))
@@ -308,7 +359,7 @@ def build_environment(sc):
             return -3.5 * smooth((r - 17.0) / 3.0)
         if r < 28.0:
             return -3.5
-        return -3.5 + (r - 28.0) * 0.075 + 0.012 * max(0.0, r - 140.0) ** 1.5 + \
+        return -3.5 + (r - 28.0) * 0.050 + 0.012 * max(0.0, r - 150.0) ** 1.5 + \
             2.0 * fbm(V((math.cos(a) * 4, math.sin(a) * 4, r * 0.03)))
 
     def terrain(u, v, i, j):
@@ -421,11 +472,12 @@ def build_environment(sc):
         return hill_h(r, math.atan2(y, x))
 
     for (x, y, sc_, tiers, rot, name) in (
-            (3.0, 125.0, 1.5, 5, 0.05, "Castle_Tenshu_North"), (-9.0, 95.0, 1.0, 3, -0.2, "Castle_Yagura_NW"),
-            (13.0, 105.0, 0.9, 3, 0.3, "Castle_Yagura_NE"), (-2.0, -125.0, 1.45, 4, 3.2, "Castle_Tenshu_South"),
-            (10.0, -98.0, 0.95, 3, 2.9, "Castle_Yagura_S"), (125.0, 2.0, 1.45, 4, 1.6, "Castle_Tenshu_East"),
-            (98.0, -10.0, 0.95, 3, 1.4, "Castle_Yagura_E"), (-125.0, -3.0, 1.45, 4, -1.5, "Castle_Tenshu_West"),
-            (-98.0, 10.0, 0.95, 3, -1.7, "Castle_Yagura_W")):
+            (6.0, 205.0, 1.45, 5, 0.05, "Castle_Tenshu_North"), (-22.0, 160.0, 0.95, 3, -0.2, "Castle_Yagura_NW"),
+            (26.0, 170.0, 0.85, 3, 0.3, "Castle_Yagura_NE"), (-6.0, -205.0, 1.45, 5, 3.2, "Castle_Tenshu_South"),
+            (22.0, -160.0, 0.95, 3, 2.9, "Castle_Yagura_SE"), (-26.0, -170.0, 0.85, 3, 3.4, "Castle_Yagura_SW"),
+            (205.0, -6.0, 1.45, 5, 1.6, "Castle_Tenshu_East"), (160.0, -22.0, 0.95, 3, 1.4, "Castle_Yagura_E"),
+            (170.0, 26.0, 0.85, 3, 1.8, "Castle_Yagura_E2"), (-205.0, 6.0, 1.45, 5, -1.5, "Castle_Tenshu_West"),
+            (-160.0, 22.0, 0.95, 3, -1.7, "Castle_Yagura_W"), (-170.0, -26.0, 0.85, 3, -1.3, "Castle_Yagura_W2")):
         keep(x, y, on_hill(x, y), sc_, tiers, rot, name)
 
     # maple trees (red) on the hill and at the courtyard edge, pines further up
@@ -455,6 +507,25 @@ def build_environment(sc):
             cr.v = [cen + V((p.x * s_ * 1.3, p.y * s_ * 1.3, p.z * s_ * 0.75)) +
                     V((p.x, p.y, p.z)) * s_ * 0.35 * fbm(p * 2.5 + cen) for p in cr.v]
             crowns.add(cr)
+    for ax, ay in ((0, 1), (0, -1), (1, 0), (-1, 0)):
+        for side_, r in ((-1, 21.0), (1, 23.5)):
+            lat = side_ * RNG.uniform(2.6, 3.4)
+            x = ax * r + (ay != 0) * lat
+            y = ay * r + (ax != 0) * lat
+            z0 = hill_h(math.hypot(x, y))
+            h = RNG.uniform(8.5, 10.5)
+            base = V((x, y, z0))
+            path = [base, base + V((RNG.uniform(-0.4, 0.4), RNG.uniform(-0.4, 0.4), h * 0.55)),
+                    base + V((side_ * 1.2 * (ay != 0), side_ * 1.2 * (ax != 0), h))]
+            trunks.add(tube(catmull_path(path, 4), 0.20, 8, scale=lambda t: 1.0 - 0.6 * t))
+            for c in range(26):
+                cr = uv_sphere(1.0, 12, 8)
+                s_ = RNG.uniform(0.6, 1.2)
+                off = V((RNG.uniform(-2.6, 2.6), RNG.uniform(-2.6, 2.6), RNG.uniform(-1.4, 1.0)))
+                cen = path[-1] + off
+                cr.v = [cen + V((p.x * s_ * 1.3, p.y * s_ * 1.3, p.z * s_ * 0.75)) +
+                        V((p.x, p.y, p.z)) * s_ * 0.35 * fbm(p * 2.5 + cen) for p in cr.v]
+                crowns.add(cr)
     for k in range(260):
         a_ = RNG.uniform(0, TAU)
         r = RNG.uniform(40.0, 200.0)
@@ -504,10 +575,16 @@ def build_props_showcase(sc):
     p.translate(origin + V((0, 0, 0.45)))
     to_obj("Showcase_Plinth", p, plinth_m, coll, smooth=False)
     kage_gear.build_showcase_items(coll, origin + V((0, 0, 0.9)))
+    # black velvet backdrop behind the display (items read on black, like the concept's item row)
+    velvet = mat_simple("Showcase_Black_Velvet", (0.004, 0.004, 0.004), rough=0.95, sheen=0.3)
+    card = grid(lambda u, v, i, j: (origin.x + lerp(-4.0, 4.0, u), origin.y + 1.3 + 0.8 * (1 - v) ** 3,
+                                    lerp(0.0, 3.4, v)), lin(0, 1, 4), lin(0, 1, 12))
+    to_obj("Showcase_Backdrop", card, velvet, coll)
     cams = collection("Cameras")
     make_camera("CAM_Props", cams, origin + V((0.0, -3.2, 1.9)), target=origin + V((0.0, 0.0, 1.0)), focal=40)
     make_camera("CAM_Weapons", cams, origin + V((0.65, -1.45, 1.45)), target=origin + V((0.55, 0.0, 1.05)), focal=45)
     # soft studio lights for the showcase
     lc = collection("Lighting")
-    area("Props_Key", lc, origin + V((-1.5, -2.0, 2.6)), origin + V((0, 0, 1.0)), 220, (1.0, 0.82, 0.65), 2.0, None)
-    area("Props_Rim", lc, origin + V((1.8, 1.5, 2.0)), origin + V((0, 0, 1.0)), 160, (1.0, 0.55, 0.3), 1.5, None)
+    area("Props_Key", lc, origin + V((-1.5, -2.0, 2.6)), origin + V((0, 0, 1.0)), 70, (1.0, 0.86, 0.72), 1.2, None)
+    area("Props_Softbox", lc, origin + V((0.0, -0.6, 2.4)), origin + V((0, 0, 0.9)), 90, (1.0, 0.92, 0.82), 1.6, None)
+    area("Props_Rim", lc, origin + V((1.8, 1.5, 2.0)), origin + V((0, 0, 1.0)), 90, (1.0, 0.55, 0.3), 1.0, None)
