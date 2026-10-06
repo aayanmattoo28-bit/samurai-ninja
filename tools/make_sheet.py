@@ -58,7 +58,8 @@ def panel(img, box, src, crop_center=(0.5, 0.5), zoom=1.0, border=(70, 62, 52)):
     cy = max(0, min(im.height - h, cy))
     img.paste(im.crop((cx, cy, cx + w, cy + h)), (x0, y0))
     d = ImageDraw.Draw(img)
-    d.rectangle([x0, y0, x1 - 1, y1 - 1], outline=border, width=2)
+    if border is not None:
+        d.rectangle([x0, y0, x1 - 1, y1 - 1], outline=border, width=2)
 
 
 def seal(d, cx, cy, r, txt="影"):
@@ -83,7 +84,7 @@ def main():
     views = [("Front", (88, 0, 318, 712)), ("Left", (318, 0, 528, 712)), ("Right", (528, 0, 738, 712)),
              ("Back", (738, 0, 960, 712))]
     for v, box in views:
-        panel(img, box, os.path.join(A, f"turn_{v}.png"), (0.5, 0.47), border=(16, 14, 13))
+        panel(img, box, os.path.join(A, f"turn_{v}.png"), (0.5, 0.47), border=None)  # one seamless strip
     # darkened side columns
     d.rectangle([0, 0, 88 * K, 712 * K], fill=(14, 12, 11))
     d.rectangle([960 * K, 0, W, 712 * K], fill=(14, 12, 11))

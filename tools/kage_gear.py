@@ -273,9 +273,9 @@ def lamellar_panel(th_c, width_deg, z_top, rows, row_h, off0, flare, seed=0):
 
         plates.add(grid(fn, lin(0, 1, 16), lin(0, 1, 4)))
         edge = [fn(q / 16, 0.0) + body_normal(th_c + lerp(-wk, wk, q / 16), zb) * 0.003 for q in range(17)]
-        gold.add(tube(edge, 0.0016, 6, rx=0.0026))
+        gold.add(tube(edge, 0.0016, 8, rx=0.0026))
         for s in (0.0, 1.0):
-            gold.add(tube([fn(s, q / 4) + body_normal(th_c, zb) * 0.003 for q in range(5)], 0.0022, 6))
+            gold.add(tube([fn(s, q / 4) + body_normal(th_c, zb) * 0.003 for q in range(5)], 0.0022, 8))
         for q in range(5):
             u = (q + 0.5) / 5
             a = fn(u, 1.0) + body_normal(th_c, zt) * 0.004 + V((0, 0, 0.006))
@@ -529,7 +529,7 @@ def place_gourd(theta, z_bot, scale, out, coll_mds, tilt=0.0):
     # stopper + cap
     st = lathe([(0.0, 0.0), (0.012, 0.0), (0.013, 0.012), (0.009, 0.02), (0.0, 0.021)], 16)
     st.transform(m @ Matrix.Translation((0, 0, 0.158 * scale)))
-    coll_mds["gold"].add(st)
+    coll_mds["wood"].add(st)
     # cord around the waist of the gourd and up to the belt
     w = m @ V((0, 0, 0.09 * scale))
     ring = [m @ V((0.022 * scale * math.sin(a), -0.022 * scale * math.cos(a), 0.09 * scale)) for a in lin(0, TAU, 24)[:-1]]
@@ -720,7 +720,7 @@ def rope_coil_md(height=0.27, width=0.11, loops=7, r=0.0062):
 
 def build_gear(coll, root):
     mds = {k: MD() for k in ("gourd", "gold", "cord", "bomb", "bomb_decal", "pouch", "pouch_flap", "leather_dark",
-                             "flask", "flask_tassel", "flask_body", "steel", "grip", "iron")}
+                             "flask", "flask_tassel", "flask_body", "steel", "grip", "iron", "wood")}
     # gourds (hyotan)
     place_gourd(deg(14), 0.80, 0.80, 0.085, mds, 0.05)
     place_gourd(deg(40), 0.82, 0.85, 0.085, mds, -0.04)
@@ -767,12 +767,12 @@ def build_gear(coll, root):
             "bomb_decal": M["decal_smoke"], "pouch": M["leather_tooled"], "pouch_flap": M["leather_tooled"],
             "leather_dark": M["leather_dark"], "flask_tassel": M["cord_red"], "flask_body": M["bronze_engraved"],
             "steel": M["forged"],
-            "grip": M["cord_dark"], "iron": M["iron"]}
+            "grip": M["cord_dark"], "iron": M["iron"], "wood": M["wood"]}
     names = {"gourd": "Gourds_Hyotan", "gold": "Gear_Gold_Fittings", "cord": "Gear_Red_Cords",
              "bomb": "Smoke_Bombs", "bomb_decal": "Smoke_Bombs_Kanji", "pouch": "Utility_Pouches",
              "pouch_flap": "Utility_Pouch_Flaps", "leather_dark": "Pouch_Straps", "flask_tassel": "Powder_Flask_Tassel",
              "flask_body": "Powder_Flask_Body",
-             "steel": "Kunai_Blades", "grip": "Kunai_Grips", "iron": "Kunai_Rings"}
+             "steel": "Kunai_Blades", "grip": "Kunai_Grips", "iron": "Kunai_Rings", "wood": "Gourd_Stoppers"}
     for k, md in mds.items():
         if not md.v:
             continue
@@ -857,7 +857,7 @@ def build_back(coll, root):
 def build_showcase_items(coll, origin):
     o = V(origin)
     mds = {k: MD() for k in ("gourd", "gold", "cord", "bomb", "bomb_decal", "pouch", "pouch_flap", "leather_dark",
-                             "flask_tassel", "flask_body", "steel", "grip", "iron", "rope", "hook")}
+                             "flask_tassel", "flask_body", "steel", "grip", "iron", "rope", "hook", "wood")}
     # smoke bombs x3
     tops = []
     for k in range(3):
@@ -906,7 +906,7 @@ def build_showcase_items(coll, origin):
             "bomb_decal": M["decal_smoke"], "pouch": M["leather_tooled"], "pouch_flap": M["leather_tooled"],
             "leather_dark": M["leather_dark"], "flask_tassel": M["cord_red"], "flask_body": M["bronze_engraved"],
             "steel": M["forged"],
-            "grip": M["cord_dark"], "iron": M["iron"], "rope": M["rope"], "hook": M["forged"]}
+            "grip": M["cord_dark"], "iron": M["iron"], "rope": M["rope"], "hook": M["forged"], "wood": M["wood"]}
     for k, md in mds.items():
         if not md.v:
             continue

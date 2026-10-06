@@ -1437,24 +1437,6 @@ def mat_metal_engraved(name, tint=(0.36, 0.22, 0.10), img="filigree.png", uv_sca
     return m
 
 
-def mat_metal_engraved(name, tint=(0.36, 0.22, 0.10), img="filigree.png", uv_scale=(3.0, 2.0), rough=0.38):
-    """Cast bronze / brass with engraved scrollwork: dark patina packed in the engraving."""
-    m = new_mat(name)
-    nb = NB(m)
-    tc = nb.texcoord()
-    obj = tc.outputs["Object"]
-    it = nb.img(img, nb.mapping(tc.outputs["UV"], (uv_scale[0], uv_scale[1], 1)), "REPEAT")
-    eng = it.outputs["Color"]
-    g = _gold_shader(nb, obj, tint, rough, 0.6, 22.0)
-    col_in = g.inputs["Base Color"].links[0].from_socket
-    col = nb.mix(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, eng), 0.65), col_in, (0.04, 0.025, 0.012))
-    nb.link(col, g.inputs["Base Color"])
-    nb.link(nb.bump(eng, 0.5, 0.0012), g.inputs["Normal"])
-    nb.output(g.outputs[0])
-    m.diffuse_color = (*tint, 1)
-    return m
-
-
 def mat_leather(name, base=(0.035, 0.017, 0.009), light=(0.075, 0.038, 0.019), rough=0.62, scuff=0.5, dirt=0.3):
     """Worn grained leather: pebble grain, creases, scuffed lighter edges, grime in crevices."""
     m = new_mat(name)

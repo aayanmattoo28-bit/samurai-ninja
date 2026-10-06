@@ -69,37 +69,46 @@ def main():
     S = float(o["scale"])
     spp = int(o["samples"])
     only = set(o["only"].split(",")) if o["only"] else None
-    rig = bpy.data.objects.get("Light_Rig")
     import kage_scene
 
     def want(n):
         return only is None or n in only
 
-    # 1. turnaround
-    for v, (loc, rot, rz) in kage_scene.TURNAROUND.items():
+    # 1. turnaround: square-on cameras, environment yawed to each panel's slice of one continuous backdrop
+    for v in kage_scene.TURNAROUND:
         if not want(v):
             continue
-        if rig:
-            rig.rotation_euler[2] = math.radians(rz)
-        render(sc, bpy.data.objects["CAM_" + v], os.path.join(out, f"turn_{v}.png"), (int(560 * S), int(1400 * S)),
-               spp)
-    if rig:
-        rig.rotation_euler[2] = 0.0
-    # 2. details (character closeups)
+        camo = kage_scene.place_turn(v)
+        rx, ry = kage_scene.PANEL_RES[v]
+        render(sc, camo, os.path.join(out, f"turn_{v}.png"), (int(rx * S), int(ry * S)), max(spp, 128) if spp >= 48 else spp)
+    kage_scene.set_view(0.0)
+    # 2. details (character close-ups): environment and lights turned to face the detail camera, raking key on
+    key = bpy.data.objects.get("Key_Warm")
+    fill = bpy.data.objects.get("Fill_Cool")
     for v in ("FrontWaist", "BackWaist", "Kasa", "Mask", "Armor", "Fabric", "LegArmor"):
         if not want(v):
             continue
-        if rig:
-            rig.rotation_euler[2] = math.radians(180 if v in ("BackWaist", "Fabric") else (90 if v == "Armor" else 0))
+        camo = bpy.data.objects["CAM_Detail_" + v]
+        loc, tgt = kage_scene.DETAILS[v][0], kage_scene.DETAILS[v][1]
+        kage_scene.set_view(kage_scene.view_yaw(Vector(tgt) - Vector(loc)))
         res = (int(700 * S), int(530 * S)) if "Waist" in v else (int(420 * S), int(500 * S))
         ff = bpy.data.objects.get("Face_Fill")
+        rk = bpy.data.objects.get("Rake_" + v)
+        saved = [(ob, ob.data.energy) for ob in (key, fill) if ob is not None]
         if ff is not None:
             ff.data.energy = 24 if v == "Mask" else 7
-        render(sc, bpy.data.objects["CAM_Detail_" + v], os.path.join(out, f"detail_{v}.png"), res, spp)
+        if rk is not None:
+            rk.hide_render = False
+            for ob, e in saved:
+                ob.data.energy = e * 0.5
+        render(sc, camo, os.path.join(out, f"detail_{v}.png"), res, spp)
         if ff is not None:
             ff.data.energy = 7
-    if rig:
-        rig.rotation_euler[2] = 0.0
+        if rk is not None:
+            rk.hide_render = True
+        for ob, e in saved:
+            ob.data.energy = e
+    kage_scene.set_view(0.0)
     # 3. sword placement top view (hat hidden)
     if want("TopView"):
         hidden = []

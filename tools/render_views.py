@@ -7,6 +7,7 @@ import os
 import sys
 
 import bpy
+from mathutils import Vector
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
@@ -45,15 +46,15 @@ def main():
         sc.camera = cam
         res = int(opts["res"])
         if v in kage_scene.TURNAROUND:
+            kage_scene.place_turn(v)
+            rx, ry = kage_scene.PANEL_RES[v]
             sc.render.resolution_x = res
-            sc.render.resolution_y = int(res * float(opts["aspect"]))
-            if rig:
-                rig.rotation_euler[2] = math.radians(kage_scene.TURNAROUND[v][2])
+            sc.render.resolution_y = int(res * ry / rx)
         else:
             sc.render.resolution_x = res
             sc.render.resolution_y = int(res * 0.75)
-            if rig:
-                rig.rotation_euler[2] = 0.0
+            loc, tgt = kage_scene.DETAILS[v][0], kage_scene.DETAILS[v][1]
+            kage_scene.set_view(kage_scene.view_yaw(Vector(tgt) - Vector(loc)))
         sc.render.filepath = os.path.join(opts["out"], opts["prefix"] + v + ".png")
         bpy.ops.render.render(write_still=True)
         print("rendered", sc.render.filepath)

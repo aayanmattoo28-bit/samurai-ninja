@@ -1,5 +1,6 @@
 """Body anchors, body-conforming surfaces, and the head / hood / scarf / kasa."""
 import math
+import random
 
 from mathutils import Matrix, Vector
 
@@ -446,6 +447,14 @@ def build_kasa(coll, parent):
             return ct + V((rr * math.sin(u), -rr * math.cos(u), z))
 
         tassel_md.add(grid(fr, lin(0, TAU, 24), lin(0, 1, 8), closed_u=True))
+        lr = random.Random(100 + k)  # loose silk fibres past the hem
+        for q in range(30):
+            a2 = TAU * (q + 0.5) / 30
+            Ls = lens[q % 24] * lr.uniform(1.0, 1.12)
+            p0 = cap_top + V((0.0070 * math.sin(a2), -0.0070 * math.cos(a2), -0.016))
+            p1 = cap_top + V((0.0125 * math.sin(a2) + lr.uniform(-0.002, 0.002),
+                              -0.0125 * math.cos(a2) + lr.uniform(-0.002, 0.002), -0.016 - Ls))
+            tassel_md.add(tube(catmull_path([p0, p0.lerp(p1, 0.5), p1], 3), 0.0007, 4, cap0=False))
     to_obj("Kasa_Tassels", tassel_md.transform(TILT), M["tassel"], coll, parent=parent)
     to_obj("Kasa_TasselCaps", cap_md.transform(TILT), M["gold_dark"], coll, parent=parent)
     to_obj("Kasa_TasselCords", cord_md.transform(TILT), M["tassel"], coll, parent=parent)

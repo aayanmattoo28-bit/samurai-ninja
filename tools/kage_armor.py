@@ -1,5 +1,6 @@
 """Torso (do cuirass, straps), sode shoulder guards, arms (kote + gloves), legs (pants, suneate, boots)."""
 import math
+import random
 
 from mathutils import Matrix, Vector
 
@@ -51,6 +52,16 @@ def tassel(top, length=0.05, r0=0.004, r1=0.008, strands=18):
         return V(top) + V((rr * math.sin(u), -rr * math.cos(u), -v * lens[i % strands]))
 
     md = grid(fn, lin(0, TAU, strands), lin(0, 1, 6), closed_u=True)
+    # loose silk fibres spilling past the hem (local Random: keeps the global RNG stream unchanged)
+    tp = V(top)
+    lr = random.Random(int(abs(tp.x) * 1e4 + abs(tp.y) * 7e3 + tp.z * 1e3))
+    for k in range(strands):
+        a = TAU * (k + 0.5) / strands
+        Ls = lens[k] * lr.uniform(1.02, 1.15)
+        p0 = tp + V((r0 * 0.9 * math.sin(a), -r0 * 0.9 * math.cos(a), -0.002))
+        p1 = tp + V((r1 * 1.1 * math.sin(a) + lr.uniform(-0.0015, 0.0015),
+                     -r1 * 1.1 * math.cos(a) + lr.uniform(-0.0015, 0.0015), -Ls))
+        md.add(tube(catmull_path([p0, p0.lerp(p1, 0.5), p1], 3), 0.0006, 4, cap0=False))
     return md
 
 
@@ -239,7 +250,7 @@ def build_torso(coll, root):
         fr = frames_along(pts, up=lambda i, p, ups=ups: ups[i])
         for s in (-1, 1):
             edge = [p + B * 0.026 * s + Nn * 0.003 for p, (T, Nn, B) in zip(pts, fr)]
-            wat_trim.add(tube(edge, 0.0025, 6))
+            wat_trim.add(tube(edge, 0.0025, 8))
     w = to_obj("Do_Watagami", wat, M["lacquer"], coll, parent=root)
     mod_subsurf(w, 1, 2)
     to_obj("Do_Watagami_Trim", wat_trim, M["gold"], coll, parent=root)
@@ -368,14 +379,14 @@ def build_sode(coll, root):
             # gold trims: bottom (+ sides) of each lame; full border on the dragon plate
             tgt = gold if mk == "dragon" else gold_dk
             bottom = [sode_local(lerp(-W / 2, W / 2, k / 24), zb + 0.003, fb + 0.004) for k in range(25)]
-            tgt.add(tube(bottom, 0.0032, 6, rx=0.0045))
+            tgt.add(tube(bottom, 0.0032, 8, rx=0.0045))
             for sx in (-1, 1):
                 sidep = [sode_local(sx * W / 2 * 0.995, lerp(zb, zt, k / 6), lerp(fb, ft, k / 6) + 0.003)
                          for k in range(7)]
-                tgt.add(tube(sidep, 0.0026, 6))
+                tgt.add(tube(sidep, 0.0026, 8))
             if mk == "dragon":
                 top = [sode_local(lerp(-W / 2, W / 2, k / 24), zt - 0.004, ft + 0.004) for k in range(25)]
-                gold.add(tube(top, 0.0028, 6))
+                gold.add(tube(top, 0.0028, 8))
                 # rivet studs along the border
                 for k in range(11):
                     for zz, ff in ((zb + 0.010, fb + 0.004), (zt - 0.012, ft + 0.004)):
@@ -525,10 +536,10 @@ def build_tekko():
     plate = grid(fn, lin(0, 1, 12), lin(0, 1, 10))
     trim = MD()
     edge = [fn(k / 12, 1.0, 0, 0) + V((0.002, 0, 0)) for k in range(13)]
-    trim.add(tube(edge, 0.002, 6))
+    trim.add(tube(edge, 0.002, 8))
     for s in (0.0, 1.0):
         e2 = [fn(s, k / 10, 0, 0) + V((0.002, 0, 0)) for k in range(11)]
-        trim.add(tube(e2, 0.002, 6))
+        trim.add(tube(e2, 0.002, 8))
     # knuckle guards: small plates over each finger's first segment
     for y in (-0.031, -0.0105, 0.0105, 0.031):
         b = box(0.004, 0.016, 0.018)
@@ -595,12 +606,12 @@ def build_arms(coll, root):
         return c + (o * math.cos(th) + sd * math.sin(th)) * (r_br(t, th) + extra)
 
     for th in (th0, th1):
-        gold.add(tube([br_point(k / 12, th * 0.995, 0.002) for k in range(13)], 0.0028, 6))
+        gold.add(tube([br_point(k / 12, th * 0.995, 0.002) for k in range(13)], 0.0028, 8))
     for t in (0.0, 1.0):
-        gold.add(tube([br_point(t, lerp(th0, th1, k / 24), 0.002) for k in range(25)], 0.0032, 6))
+        gold.add(tube([br_point(t, lerp(th0, th1, k / 24), 0.002) for k in range(25)], 0.0032, 8))
     # central raised plate border lines
     for th in (-deg(32), deg(32)):
-        gold.add(tube([br_point(0.04 + k / 12 * 0.92, th, 0.0035) for k in range(13)], 0.0018, 6))
+        gold.add(tube([br_point(0.04 + k / 12 * 0.92, th, 0.0035) for k in range(13)], 0.0018, 8))
     # leather straps around forearm with gold buckles
     for t in (0.22, 0.52, 0.80):
         c = E.lerp(Wr, lerp(t0, t1, t))
