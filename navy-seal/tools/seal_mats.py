@@ -211,16 +211,21 @@ def mat_metal(name="Metal_Gunmetal", base=(0.055, 0.056, 0.060), rough=0.38, edg
     return m
 
 
-def mat_visor(name="Visor_Blue", tint=(0.012, 0.078, 0.254), glow=0.4):
+def mat_visor(name="Visor_Blue", tint=(0.006, 0.040, 0.170), glow=0.35):
     """Blue mirrored / tinted dive-mask lens: strong glossy reflection, faint internal blue glow."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     lw = nb.n("ShaderNodeLayerWeight", (-600, -200))
     lw.inputs["Blend"].default_value = 0.35
-    col = nb.mix(lw.outputs["Facing"], tint, (0.10, 0.32, 0.75))
-    p = nb.principled(Base_Color=col, Metallic=0.5, Roughness=0.04, Coat_Weight=1.0, Coat_Roughness=0.02,
-                      Emission_Color=(0.01, 0.06, 0.25), Emission_Strength=glow)
+    col = nb.mix(lw.outputs["Facing"], (0.020, 0.090, 0.42), (0.10, 0.30, 0.75))
+    gz = nb.n("ShaderNodeSeparateXYZ", (-600, -500))
+    nb.link(tc.outputs["Generated"], gz.inputs[0])
+    shade = nb.ramp(gz.outputs[2], [(0.0, 1.0), (0.55, 0.85), (1.0, 0.25)])      # dark band under the helmet brim
+    col = nb.mix(nb.math("SUBTRACT", 1.0, shade), col, (0.004, 0.012, 0.035))
+    # mirrored cobalt lens: fully metallic so every reflection (sky, sun) comes back tinted deep blue
+    p = nb.principled(Base_Color=col, Metallic=1.0, Roughness=0.05, Coat_Weight=0.25, Coat_Roughness=0.03,
+                      Emission_Color=(0.01, 0.06, 0.25), Emission_Strength=nb.math("MULTIPLY", shade, glow))
     nb.output(p.outputs[0])
     m.diffuse_color = (*tint, 1)
     return m

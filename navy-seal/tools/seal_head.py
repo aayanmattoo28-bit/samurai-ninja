@@ -1,8 +1,8 @@
 """Head (measured from the concept sheet): high-cut ballistic helmet with rail band, forehead arches, NVG shroud +
 flipped-up binocular NVG, rail lights, ring knobs, rear antenna boxes, crown strip, battery box, velcro panels and the
 rear retention dial; D-shaped comms ear cups; one panoramic blue goggle lens in a rubber frame; a faceted respirator
-with nose ridge, seams and the round regulator; thin beaded jaw hoses; the rebreather neck manifold wrapped in hose
-turns; and the single continuous corrugated breathing-hose loop that sags across the chest under the chin."""
+with nose ridge, seams and the round regulator; thin beaded jaw hoses; the rebreather's corrugated neck bellows with
+side canisters; and the single continuous corrugated breathing-hose loop that sags across the chest under the chin."""
 import math
 
 from mathutils import Matrix
@@ -19,7 +19,7 @@ EDGE = [(0, 1.735), (30, 1.736), (45, 1.744), (60, 1.749), (100, 1.749), (124, 1
 GOG_C = V((0.0, -0.071, 0.0))         # goggle plan-circle centre (x, y)
 GOG_R = 0.100
 REG_C = V((0.0, -0.175, 1.591))       # regulator face centre
-MANIFOLD = {"x0": -0.175, "x1": 0.185, "y": 0.150, "z": 1.592, "r": 0.058}
+MANIFOLD = {"x0": -0.175, "x1": 0.175, "y": 0.088, "z": 1.596, "r": 0.034}   # neck bellows + side canisters
 
 LENSES = MD()
 LENSES_DARK = MD()
@@ -206,12 +206,15 @@ def build(coll, root):
         nvg.add(torus_md(0.0125, 0.0040, 24, 6).transform(look_matrix(V((s * 0.050, -0.205, 1.790)), (s, 0, 0), (0, 0, 1))))
         nvg.add(lathe([(0.0, 0.0), (0.012, 0.0), (0.012, 0.006), (0.0, 0.006)], 16)
                 .transform(look_matrix(V((s * 0.048, -0.205, 1.790)), (s, 0, 0), (0, 0, 1))))
-        LENSES_DARK.add(lathe([(0.0, 0.0), (0.0135, 0.0), (0.0, 0.002)], 20)
-                        .transform(look_matrix(a - ax * 0.001, -ax, (0, 0, 1))))
+        nvg.add(torus_md(0.0128, 0.0045, 24, 6).transform(look_matrix(a - ax * 0.002, -ax, (0, 0, 1))))  # eyecup
+        nvg.add(lathe([(0.0, 0.0), (0.0125, 0.0), (0.0, 0.003)], 20).transform(look_matrix(a + ax * 0.004, -ax,
+                                                                                            (0, 0, 1))))
         nvg.add(box(0.008, 0.008, 0.006).translate((s * 0.009, -0.185, 1.871)))
         nvg.add(box(0.014, 0.012, 0.012).translate((s * 0.040, -0.222, 1.770)))
     nvg.add(box(0.037, 0.030, 0.030).translate((0.0, -0.185, 1.853)))
-    LENSES.add(box(0.010, 0.002, 0.009).translate((0.0, -0.226, 1.808)))
+    nvg.add(box(0.022, 0.016, 0.095).transform(Matrix.Translation((0.0, -0.218, 1.805)) @
+                                               Matrix.Rotation(math.radians(-25), 4, "X")))   # tall centre bridge
+    LENSES.add(box(0.010, 0.002, 0.009).translate((0.0, -0.228, 1.808)))
 
     # ------------------------------------------------------------------------- comms ear cups (D-shaped)
     cups, cupd = MD(), MD()
@@ -248,16 +251,21 @@ def build(coll, root):
         return V((GOG_C.x + R * math.sin(th), GOG_C.y - R * math.cos(th), z))
 
     def notch(th):
+        """Lens bottom edge: the nose bridge rises well into the centre (two lobes, as on the sheet) and the
+        lower outer corners round up toward the temples."""
         x = abs(GOG_R * math.sin(th))
-        if x < 0.009:
-            return 1.692
-        if x < 0.017:
-            return lerp(1.692, 1.668, (x - 0.009) / 0.008)
-        return 1.668
+        if x < 0.007:
+            return 1.708
+        if x < 0.030:
+            t = (x - 0.007) / 0.023
+            return lerp(1.708, 1.668, 1 - (1 - t) ** 2)
+        if x < 0.062:
+            return 1.668
+        return lerp(1.668, 1.684, smooth((x - 0.062) / 0.022))
 
     th_max = math.radians(56)
-    LENSES_VISOR.add(grid(lambda u, v, i, j: gog_pt(u, lerp(notch(u), 1.731, v), 0.001), lin(-th_max, th_max, 56),
-                          lin(0, 1, 10)))
+    LENSES_VISOR.add(grid(lambda u, v, i, j: gog_pt(u, lerp(notch(u), 1.731 - 0.003 * math.cos(u * 3.0), v), 0.001),
+                          lin(-th_max, th_max, 72), lin(0, 1, 12)))
     frame = MD()
     ring = ([gog_pt(th, 1.733, 0.004) for th in lin(-th_max, th_max, 40)] +
             [gog_pt(th_max + 0.03, lerp(1.731, 1.668, t), 0.004) for t in lin(0.1, 0.9, 6)] +
@@ -286,7 +294,7 @@ def build(coll, root):
         if a < 0.5:
             t = a / 0.5
             x, y = lerp(0.0, xc, t), lerp(yf, yc, t)
-            y -= 0.010 * math.exp(-(a / 0.08) ** 2) * smooth((z - 1.60) / 0.03)  # nose ridge prism
+            y -= 0.016 * math.exp(-(a / 0.075) ** 2) * smooth((z - 1.640) / 0.014)  # nose ridge prism
         else:
             t = (a - 0.5) / 0.5
             x, y = lerp(xc, xr, t), lerp(yc, yr, t)
@@ -294,6 +302,18 @@ def build(coll, root):
 
     ro = to_obj("Mask_Respirator", grid(lambda u, v, i, j: rpt(u, lerp(1.561, 1.665, v)), lin(-1, 1, 24), lin(0, 1, 12)),
                 M["mask"], coll, parent=root, smooth=False)
+    # seams: diagonals from the goggle's outer corners down to the regulator, horizontal one under the nose
+    seams = MD()
+    for sg in (-1, 1):
+        seams.add(tube([rpt(sg * u_, z_) + V((0, -0.0015, 0)) for u_, z_ in ((0.92, 1.664), (0.6, 1.640), (0.35, 1.618),
+                                                                               (0.22, 1.604))], 0.0016, 5))
+    seams.add(tube([rpt(u_, 1.648) + V((0, -0.0015, 0)) for u_ in lin(-0.55, 0.55, 9)], 0.0014, 5))
+    to_obj("Mask_Seams", seams, M["rubber"], coll, parent=root)
+    # nose bridge of the mask rising into the goggle's centre notch (splits the lens into two lobes)
+    nb_ = MD()
+    nb_.add(grid(lambda u, v, i, j: V((lerp(-0.013, 0.013, u) * (1 - 0.55 * v), lerp(-0.187, -0.170, v)
+                                        + 0.010 * abs(u - 0.5) * 2, lerp(1.660, 1.707, v))), lin(0, 1, 5), lin(0, 1, 5)))
+    to_obj("Mask_Nose_Bridge", nb_, M["mask"], coll, parent=root, smooth=False)
     mod_solidify(ro, 0.006, 1.0)
     mod_bevel(ro, 0.0015, 1)
     to_obj("Mask_Chin", grid(lambda u, v, i, j: rpt(u, 1.561) * (1 - v) + V((0.0, -0.13, 1.556)) * v, lin(-1, 1, 16),
@@ -331,32 +351,36 @@ def build(coll, root):
                      up=(s, 0, 0)))
     to_obj("Mask_Harness", hz, M["nylon_dark"], coll, parent=root)
 
-    # ------------------------------------------------------------------------- rebreather neck manifold + hose wrap
+    # ------------------------------------------------------------------------- rebreather neck unit
+    # a vertical corrugated bellows collar wrapped round the back of the neck (horizontal ribs, as the BACK view
+    # shows), domed into the helmet's rear edge, with short ribbed canisters at each side where the hose plugs in
     Mf = MANIFOLD
-    axis_pts = [V((lerp(Mf["x0"], Mf["x1"], t), Mf["y"], Mf["z"])) for t in lin(0, 1, 16)]
+    z0, z1, pitch = 1.556, 1.684, 0.0094
 
-    def man_r(t, u):
-        cap = min(1.0, min(t, 1 - t) / 0.08)
-        return Mf["r"] * (0.70 + 0.30 * math.sqrt(max(0.0, cap)))
-
-    to_obj("Rebreather_Manifold", L.limb(axis_pts, man_r, 32, ref=(0, 0, 1), cap0=True, cap1=True),
+    def bell(u, v, i, j):
+        z = lerp(z0, z1, v)
+        rib = 0.0042 * (0.5 + 0.5 * math.cos(TAU * (z - z0) / pitch)) ** 1.5
+        dome = math.sqrt(max(0.0, 1 - max(0.0, (z - 1.655) / 0.031) ** 2))
+        flare = 1.0 + 0.10 * smooth((1.585 - z) / 0.03)
+        rx, ry = (0.108 * flare * (0.55 + 0.45 * dome) + rib), (0.060 * flare * (0.6 + 0.4 * dome) + rib)
+        return V((rx * math.sin(u), 0.088 + ry * math.cos(u), z))
+    to_obj("Rebreather_Neck_Bellows", grid(bell, lin(0, TAU, 48), lin(0, 1, 110), closed_u=True, pole_v1=True),
            M["rubber"], coll, parent=root)
-    # the hose is coiled over the whole manifold, end domes included, so the hump behind the neck reads ribbed
-    hel = []
-    turns, steps = 11, 40
-    for k in range(turns * steps + 1):
-        t = k / (turns * steps)
-        a = TAU * k / steps
-        rr = man_r(lerp(0.02, 0.98, t), 0.0) + 0.013
-        hel.append(V((lerp(Mf["x0"] + 0.012, Mf["x1"] - 0.012, t), Mf["y"] + rr * math.sin(a),
-                      Mf["z"] + rr * math.cos(a))))
-    to_obj("Rebreather_Manifold_Hose_Wrap", corrugated(hel, 0.0155, pitch=0.0065, depth=0.0018, n=10), M["rubber"],
-           coll, parent=root)
+    cans = MD()
+    for sg in (-1, 1):
+        ax = [V((sg * lerp(0.095, 0.172, t), 0.090, 1.596)) for t in lin(0, 1, 12)]
+
+        def can_r(t, u):
+            cap = min(1.0, (1 - t) / 0.12)
+            return 0.034 * (0.75 + 0.25 * math.sqrt(max(0.0, cap))) + \
+                0.003 * (0.5 + 0.5 * math.cos(TAU * t * 0.077 / 0.0085)) ** 2
+        cans.add(L.limb(ax, can_r, 24, nt=40, ref=(0, 0, 1), cap1=True))
+    to_obj("Rebreather_Side_Canisters", cans, M["rubber"], coll, parent=root)
     for s in (-1, 1):
-        pc = V((0.170 if s > 0 else -0.160, Mf["y"] + 0.040, Mf["z"] + 0.015))
+        pc = V((s * 0.168, 0.118, 1.610))
         metal.add(lathe([(0.0, 0.0), (0.020, 0.0), (0.020, 0.010), (0.011, 0.010), (0.011, 0.006), (0.0, 0.006)], 24)
                   .transform(look_matrix(pc, V((s * 0.5, 0.7, 0.4)).normalized(), (0, 0, 1))))
-    tbox(poly, V((0.008, Mf["y"] + 0.066, Mf["z"] + 0.045)), V((0, 1, 0)), 0.060, 0.030, 0.020)
+    tbox(poly, V((0.008, 0.152, 1.640)), V((0, 1, 0)), 0.050, 0.026, 0.018)
 
     # ------------------------------------------------------------------------- the main breathing-hose loop
     P = [V((0.150, 0.075, 1.608)), V((0.180, -0.035, 1.590)), V((0.162, -0.135, 1.546)), V((0.110, -0.176, 1.519)),
