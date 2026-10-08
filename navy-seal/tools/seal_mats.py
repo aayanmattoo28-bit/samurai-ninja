@@ -50,7 +50,7 @@ def _wet(nb, obj, scale=1.6, lo=0.45, hi=0.62):
     return nb.ramp(w.outputs["Fac"], [(lo, 0.0), (hi, 1.0)])
 
 
-def mat_suit(name="Suit_Drysuit_Black", base=(0.010, 0.011, 0.014), line=(0.105, 0.100, 0.112),
+def mat_suit(name="Suit_Drysuit_Black", base=(0.0085, 0.0088, 0.0098), line=(0.095, 0.092, 0.096),
              blot=(0.020, 0.020, 0.023), tiles=1.25):
     """Black drysuit / combat suit: printed swirl linework camo, nylon weave, wet sheen in patches."""
     m = new_mat(name)
@@ -67,7 +67,7 @@ def mat_suit(name="Suit_Drysuit_Black", base=(0.010, 0.011, 0.014), line=(0.105,
     col = nb.mix(nb.math("MULTIPLY", wet, 0.35), col, (0.006, 0.006, 0.007))
     ao = _ao(nb, 0.04)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.002, 0.002, 0.0025))
-    rough = nb.mixf(wet, 0.48, 0.24)
+    rough = nb.mixf(wet, 0.36, 0.16)
     rough = nb.mixf(nb.math("MULTIPLY", lines, 0.8), rough, 0.30)  # the raised piping is glossier
     # weave + fine crinkle of coated nylon
     wv = nb.n("ShaderNodeTexWave", (-900, -600), wave_type="BANDS", bands_direction="DIAGONAL")
@@ -111,7 +111,7 @@ def mat_nylon(name="Nylon_Cordura_Black", base=(0.016, 0.016, 0.018), light=(0.0
 
 def mat_nylon_camo(name="Nylon_Camo_Black", base=(0.020, 0.021, 0.022), blot1=(0.040, 0.042, 0.037),
                    blot2=(0.062, 0.062, 0.055), line=(0.11, 0.10, 0.085), tiles=3.0, line_amt=0.85,
-                   edge_col=(0.10, 0.097, 0.088)):
+                   edge_col=(0.16, 0.152, 0.135)):
     """Multicam-Black style printed Cordura for the plate carrier and pouches: charcoal ground, olive-grey
     blotches, pale grey-tan swirl linework and fleck print, weave, scuffed light edges and glossy damp patches."""
     m = new_mat(name)
@@ -271,6 +271,8 @@ def mat_patch(name="Patch_Flag_Subdued", img="flag_subdued.png"):
 def build_materials():
     M.clear()
     M["suit"] = mat_suit()
+    M["suit_legs"] = mat_suit("Suit_Trousers_Black", base=(0.0068, 0.0070, 0.0078), line=(0.052, 0.050, 0.054),
+                              blot=(0.013, 0.013, 0.015))
     M["suit_panel"] = mat_suit("Suit_Panel_Black", base=(0.009, 0.009, 0.010), line=(0.035, 0.036, 0.04), tiles=1.6)
     M["nylon"] = mat_nylon()
     M["nylon_dark"] = mat_nylon("Nylon_Webbing_Black", base=(0.010, 0.010, 0.011), light=(0.028, 0.028, 0.031),
@@ -286,11 +288,11 @@ def build_materials():
     M["patch_flag"] = mat_patch()
     M["helmet"] = mat_polymer("Helmet_Shell_Cover", base=(0.026, 0.027, 0.030), rough=0.55, grain=900.0)
     M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.012, 0.012, 0.012), blot1=(0.026, 0.025, 0.022),
-                                     blot2=(0.055, 0.052, 0.045), line=(0.13, 0.122, 0.102), tiles=2.6)
+                                     blot2=(0.055, 0.052, 0.045), line=(0.20, 0.185, 0.155), tiles=2.6)
     M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.018, 0.016, 0.013), blot1=(0.038, 0.033, 0.027),
-                                    blot2=(0.080, 0.070, 0.057), line=(0.16, 0.145, 0.115), tiles=2.6)
+                                    blot2=(0.080, 0.070, 0.057), line=(0.24, 0.215, 0.17), tiles=2.6)
     M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.010, 0.011, 0.012), blot1=(0.020, 0.021, 0.023),
-                                    blot2=(0.040, 0.041, 0.043), line=(0.10, 0.10, 0.096), tiles=2.6)
+                                    blot2=(0.040, 0.041, 0.043), line=(0.15, 0.15, 0.14), tiles=2.6)
     M["carrier"] = mat_nylon_camo("Carrier_Cordura_Print", base=(0.007, 0.007, 0.0072), blot1=(0.014, 0.0135, 0.012),
                                   blot2=(0.026, 0.025, 0.022), line=(0.070, 0.066, 0.056), tiles=2.2, line_amt=0.7,
                                   edge_col=(0.060, 0.058, 0.054))

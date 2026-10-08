@@ -110,8 +110,9 @@ def object_mask():
     im = Image.new("L", (PW, PH), 0)
     d = ImageDraw.Draw(im)
     d.rectangle([0, 0, 272, 382], fill=255)                                          # title block + text panel
-    for x0, x1 in ((270, 390), (460, 640), (690, 820), (975, 1110)):                 # helmet tops, antennas, muzzle
-        d.rectangle([x0, 0, x1, 70], fill=255)
+    for x0, x1, y1 in ((262, 360, 45), (366, 382, 130), (462, 590, 45), (598, 640, 75), (700, 800, 45),
+                       (804, 818, 115), (985, 1102, 45)):                            # helmet tops, antennas, muzzle
+        d.rectangle([x0, 0, x1, y1], fill=255)
     d.polygon([(8, 545), (8, 410), (40, 400), (80, 362), (96, 336), (116, 336), (126, 362), (140, 420),
                (176, 440), (180, 545)], fill=255)                                    # submarine
     d.rectangle([378, 352, 508, 548], fill=255)                                      # patrol boat + small craft

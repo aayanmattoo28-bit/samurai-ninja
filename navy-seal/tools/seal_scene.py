@@ -179,7 +179,7 @@ def world(sc):
                  (0.479, 0.386, 0.392))
     bg = nb.n("ShaderNodeBackground", (200, 0))
     nb.link(col, bg.inputs["Color"])
-    bg.inputs["Strength"].default_value = 1.0
+    bg.inputs["Strength"].default_value = 0.55
     o = nb.n("ShaderNodeOutputWorld", (400, 0))
     nb.link(bg.outputs[0], o.inputs["Surface"])
 
@@ -203,10 +203,10 @@ def build_lights(sc):
     front-left, strong low peach rim from the sunset behind-right, blue sky rim behind-left."""
     coll = collection("Lighting")
     world(sc)
-    sun(coll, "Key_Front_Right", (0.53, -0.63, 0.57), 1.4, (0.888, 0.761, 0.658), 12)
-    sun(coll, "Fill_Moon_Front_Left", (-0.64, -0.64, 0.42), 0.5, (0.397, 0.503, 0.716), 30)
-    sun(coll, "Rim_Sunset_Back_Right", (0.75, 0.63, 0.21), 2.2, (0.930, 0.571, 0.371), 6)
-    sun(coll, "Rim_Sky_Back_Left", (-0.61, 0.61, 0.50), 1.4, (0.275, 0.397, 0.672), 10)
+    sun(coll, "Key_Front_Right", (0.53, -0.63, 0.57), 2.0, (0.888, 0.761, 0.658), 12)
+    sun(coll, "Fill_Moon_Front_Left", (-0.64, -0.64, 0.42), 0.4, (0.397, 0.503, 0.716), 30)
+    sun(coll, "Rim_Sunset_Back_Right", (0.75, 0.63, 0.21), 3.0, (0.930, 0.571, 0.371), 6)
+    sun(coll, "Rim_Sky_Back_Left", (-0.61, 0.61, 0.50), 2.0, (0.275, 0.397, 0.672), 10)
 
 
 # --- camera and the four views -----------------------------------------------------------------------------
@@ -350,10 +350,13 @@ def mat_dock(name="Dock_Concrete_Wet"):
     col = nb.mix(joint, col, (0.006, 0.007, 0.009))
     # water film: puddles (most of the quay, more toward the far edge), damp, a few dry patches
     wn = nb.noise(obj, 0.22, 5, 0.55)
-    far = nb.math("MULTIPLY", nb.math("MAXIMUM", nb.math("SUBTRACT", sx.outputs[1], 2.0), 0.0), 0.02)
-    puddle = nb.ramp(nb.math("ADD", wn.outputs["Fac"], far), [(0.40, 0.0), (0.47, 1.0)])
-    dry = nb.ramp(nb.noise(obj, 0.5, 4, 0.6).outputs["Fac"], [(0.66, 0.0), (0.72, 1.0)])
-    rough = nb.mixf(puddle, nb.mixf(dry, 0.36, 0.60), 0.09)
+    far = nb.math("MULTIPLY", nb.math("MAXIMUM", nb.math("SUBTRACT", sx.outputs[1], 2.0), 0.0), 0.003)
+    pud2 = nb.noise(obj, 1.3, 4, 0.6)
+    puddle = nb.ramp(nb.math("ADD", nb.math("ADD", wn.outputs["Fac"], far),
+                             nb.math("MULTIPLY", nb.math("SUBTRACT", pud2.outputs["Fac"], 0.5), 0.35)),
+                     [(0.50, 0.0), (0.56, 1.0)])
+    dry = nb.ramp(nb.noise(obj, 0.5, 4, 0.6).outputs["Fac"], [(0.60, 0.0), (0.66, 1.0)])
+    rough = nb.mixf(puddle, nb.mixf(dry, 0.42, 0.65), 0.09)
     drop = nb.ramp(nb.noise(obj, 260.0, 2, 0.5).outputs["Fac"], [(0.72, 0.0), (0.76, 1.0)])
     rough = nb.mixf(nb.math("MULTIPLY", drop, nb.math("SUBTRACT", 1.0, puddle)), rough, 0.03)
     rough = nb.mixf(joint, rough, 0.6)
@@ -365,13 +368,24 @@ def mat_dock(name="Dock_Concrete_Wet"):
     wv.inputs["Detail"].default_value = 4.0
     nb.link(obj, wv.inputs["Vector"])
     grit = nb.noise(obj, 40.0, 4, 0.6)
-    band = nb.ramp(wv.outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)])
+    rip = nb.noise(nb.mapping(obj, (0.6, 2.2, 1.0)), 1.2, 6, 0.65, distortion=1.5)
+    band = nb.ramp(nb.math("ADD", nb.math("MULTIPLY", wv.outputs["Fac"], 0.4), nb.math("MULTIPLY", rip.outputs["Fac"], 0.6)),
+                   [(0.40, 0.0), (0.62, 1.0)])
     rough = nb.mixf(nb.math("MULTIPLY", puddle, band), rough, 0.26)      # broken, dashed reflections
     h = nb.math("ADD", wv.outputs["Fac"], nb.math("MULTIPLY", grit.outputs["Fac"], nb.mixf(puddle, 0.6, 0.05)))
     h = nb.math("SUBTRACT", h, nb.math("MULTIPLY", joint, 0.8))
     h = nb.math("ADD", h, nb.math("MULTIPLY", drop, 0.3))
-    p = nb.principled(Base_Color=col, Roughness=rough, Specular_IOR_Level=0.5, IOR=1.33,
-                      Normal=nb.bump(h, 0.2, 0.01))
+    # at these grazing angles any glossy surface mirrors the sky; the sheet's dock only mirrors in its puddles, so
+    # the damp concrete is a rough, non-reflective layer and the puddles are a separate glossy water film
+    nrm = nb.bump(h, 0.12, 0.01)
+    wet = nb.principled(Base_Color=nb.mix(0.5, col, (0.006, 0.007, 0.010)),
+                        Roughness=nb.mixf(band, 0.04, 0.18), Specular_IOR_Level=0.5, IOR=1.33, Normal=nrm)
+    damp = nb.principled(Base_Color=col, Roughness=nb.mixf(dry, 0.55, 0.75), Specular_IOR_Level=0.0, Normal=nrm)
+    p = nb.n("ShaderNodeMixShader", (400, 0))
+    nb.link(nb.ramp(nb.math("MAXIMUM", nb.math("MULTIPLY", puddle, nb.math("SUBTRACT", 1.0, joint)),
+                            nb.math("MULTIPLY", drop, 0.6)), [(0.0, 0.0), (1.0, 1.0)]), p.inputs[0])
+    nb.link(damp.outputs[0], p.inputs[1])
+    nb.link(wet.outputs[0], p.inputs[2])
     nb.output(p.outputs[0])
     return m
 

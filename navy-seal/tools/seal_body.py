@@ -268,10 +268,13 @@ def build(coll, root):
         lg = limb(sub, lambda t, u: leg_radius(t * t_end, u) * (1.0 - 0.12 * smooth((t - 0.975) / 0.025)), 40,
                   cap0=True)
         legs.add(lg)
+    # creased, slightly baggy fabric: sharp fold ridges + softer drape + fine crinkle
     ob = to_obj("Suit_Sleeves", arms, M["suit"], coll, parent=root)
-    cloth_mods(ob, 2, [(0.003, 0.012, {"stretch": (1, 1, 3)}), (0.0012, 0.004, {"stretch": (6, 6, 1)})])
-    ob = to_obj("Suit_Trousers", legs, M["suit"], coll, parent=root)
-    cloth_mods(ob, 2, [(0.0035, 0.014, {"stretch": (1, 1, 3)}), (0.0012, 0.004, {"stretch": (6, 6, 1)})])
+    cloth_mods(ob, 2, [(0.0055, 0.030, {"stretch": (1.5, 1.5, 1), "hard": True}),
+                       (0.003, 0.012, {"stretch": (1, 1, 3)}), (0.0012, 0.004, {"stretch": (6, 6, 1)})])
+    ob = to_obj("Suit_Trousers", legs, M["suit_legs"], coll, parent=root)
+    cloth_mods(ob, 2, [(0.007, 0.040, {"stretch": (1, 1, 2.5), "hard": True}),
+                       (0.0035, 0.014, {"stretch": (1, 1, 3)}), (0.0012, 0.004, {"stretch": (6, 6, 1)})])
 
     # --- hood (neoprene) under the helmet: head ellipsoid carried forward of the shoulders, snug neck ---------
     def hood(u, v, i, j):

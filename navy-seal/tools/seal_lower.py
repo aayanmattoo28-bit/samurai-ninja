@@ -1,8 +1,8 @@
 """Lower body (measured from the concept): segmented battle belt with a cobra buckle, O-ring and lanyard, seven belt
 pouches (teardrop sheath with LED, right-hip, right-rear, rear dump pouch, rear marker cylinder, rear-left, left-hip);
 right drop-leg holster rig (platform, kydex holster, two mag pouches, sloped leg straps, hanger); left drop-leg double
-mag panel; tan rope hanks and loop; thigh cargo, shin and slim calf pockets (right one holds the knife); ribbed crotch
-gusset; vented hard-shell knee pads on backing pads with straps and buckles; 8-inch laced combat boots."""
+mag panel; tan rope hanks and loop; thigh cargo, shin and slim calf pockets (right one holds the knife); vented
+hard-shell knee pads on backing pads with straps and buckles; 8-inch laced combat boots."""
 import math
 
 from mathutils import Matrix
@@ -433,12 +433,6 @@ def build(coll, root):
         straps.add(box(0.040, 0.015, 0.024).transform(look_matrix(p + n * 0.012 + zv * 0.045, n, zv)))
         if side < 0:  # the dive knife (seal_weapons) sits in the right sheath, handle up
             GEAR_FRAMES["knife"] = (p + n * 0.011, n, zv)
-
-    # ------------------------------------------------------------------ ribbed crotch gusset
-    for k in range(12):
-        z = 0.845 + k * 0.0115
-        y = B.body_pt(0.0, z, 0.006).y
-        pockets.add(tube([V((-0.038, y + 0.004, z)), V((0.0, y - 0.001, z)), V((0.038, y + 0.004, z))], 0.0028, 6))
 
     # ------------------------------------------------------------------ knee pads: vented cap on a backing pad
     for side in (1, -1):
