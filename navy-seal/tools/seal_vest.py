@@ -154,7 +154,7 @@ def build(coll, root):
                 hard.add(box(0.004, 0.003, 0.006).translate((s * 0.166, -0.030 + k * 0.008, 1.590)))
         # edge straps down the back bag sides with stitch dots
         e0 = V((s * 0.168, back_y(0.168) + 0.002, 1.240))
-        molle.add(sweep([e0, e0 + V((0, 0, 0.37))], rect_profile(0.030, 0.003), up=(0, 1, 0)))
+        molle.add(sweep([e0, e0 + V((0, 0, BZ1 - 1.240 - 0.012))], rect_profile(0.030, 0.003), up=(0, 1, 0)))
 
     # ------------------------------------------------------------------ MOLLE: exposed front band + back rows + cummerbund
     for zz in (1.304,):

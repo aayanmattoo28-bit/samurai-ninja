@@ -197,7 +197,7 @@ def carbine_mount(m):
     path = [(0.430, -0.036, -0.020), (0.330, -0.036, -0.026), (0.245, -0.035, -0.030), (0.200, -0.019, -0.040),
             (0.060, -0.019, -0.040), (0.0, -0.020, -0.036), (-0.070, -0.022, -0.040), (-0.134, -0.020, -0.059)]
     pw = L.catmull_path([m @ V(q) for q in path], 6)
-    light.add(sweep(pw, rect_profile(0.025, 0.003), up=yo))
+    light.add(sweep(pw, rect_profile(0.016, 0.003), up=yo))
     for q in L.resample(pw, int(L.path_length(pw) / 0.006)):
         beads.add(uv_sphere(0.0016, 6, 4).translate(q + yo * 0.0018 + (m.to_3x3() @ V((0, 0, -0.0095)))))
     for xq in (0.300, 0.020):                                            # two square buckle frames
