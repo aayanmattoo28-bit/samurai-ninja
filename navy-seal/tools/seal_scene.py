@@ -28,7 +28,8 @@ CAM_D, EYE = 13.3, 0.37           # camera distance to the figure plane, eye hei
 LENS, SENSOR_W, SHIFT_Y, FSTOP = 135.0, 36.0, 0.161, 8.0
 RES = (2288, 1268)                # 2x the sheet panel
 # view -> (figure X on the dock, rotation about Z)
-FIGURES = {"Front": (-0.852, 0.0), "Left": (-0.155, -90.0), "Back": (0.546, 180.0), "Right": (1.389, 90.0)}
+# (the LEFT view is placed by its torso's mid-depth, sheet x 534, which the sheet draws 12 px behind the leg axis)
+FIGURES = {"Front": (-0.852, 0.0), "Left": (-0.118, -90.0), "Back": (0.546, 180.0), "Right": (1.389, 90.0)}
 # view -> panel columns (sheet px); the panels split at the gaps between the figures
 PANELS = {"Front": (0, 441), "Left": (441, 632), "Back": (632, 897), "Right": (897, 1144)}
 
