@@ -468,6 +468,12 @@ def mat_rock(name="Mountain_Rock_Hazed"):
     col = nb.mix(nb.ramp(st.outputs["Fac"], [(0.35, 0.0), (0.7, 1.0)]), (0.022, 0.026, 0.033), (0.055, 0.060, 0.070))
     col = nb.mix(nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.5, 0.0), (0.7, 1.0)]), 0.5), col,
                  (0.012, 0.014, 0.018))
+    geo = nb.n("ShaderNodeNewGeometry", (-900, -600))
+    gz = nb.n("ShaderNodeSeparateXYZ", (-700, -600))
+    nb.link(geo.outputs["Normal"], gz.inputs[0])
+    ledge = nb.math("MULTIPLY", nb.ramp(gz.outputs[2], [(0.62, 0.0), (0.80, 1.0)]),
+                    nb.ramp(nb.noise(obj, 0.02, 6, 0.6).outputs["Fac"], [(0.45, 0.0), (0.6, 1.0)]))
+    col = nb.mix(nb.math("MULTIPLY", ledge, 0.8), col, (0.10, 0.11, 0.125))      # pale streaks on the ledges
     p = nb.principled(Base_Color=col, Roughness=0.9, Normal=nb.bump(st.outputs["Fac"], 0.8, 30.0))
     nb.output(p.outputs[0])
     return m
@@ -534,6 +540,64 @@ def screen_post(x, y0, y1, d, w_px):
     a, b = sheet_pt(x, y1, d), sheet_pt(x, y0, d)
     r = w_px / 2 / PX_M * d / CAM_D
     return L.tube([a, b], r, 8)
+
+
+def railing(pts, h=1.0, gap=1.2, r=0.03, n=6):
+    """Ship railing along a polyline: posts every `gap` metres, a top rail and a mid rail."""
+    md = MD()
+    path = L.resample(pts, max(2, int(L.path_length(pts) / gap) + 1))
+    for q in path:
+        md.add(L.tube([q, q + V((0, 0, h))], r, n, cap0=False))
+    for f in (1.0, 0.5):
+        md.add(L.tube([q + V((0, 0, h * f)) for q in pts], r * 0.8, n))
+    return md
+
+
+def patrol_boat_parts():
+    """Harbour patrol boat / tug in local coordinates (x starboard, y forward, z up, waterline at z = 0): flared V
+    hull with sheer and a raised bow bulwark, two-level deckhouse with a window band, bridge with a wide windscreen
+    and a railed top, exhaust stack, mast with yard and radar bar, foredeck posts.  ~22 m long, 4.5 m beam."""
+    P = {k: MD() for k in ("hull", "house", "glass", "rails")}
+    Lh = 22.0
+
+    def hull(u, v, i, j):
+        y = lerp(-Lh / 2, Lh / 2, v)                                   # stern .. bow
+        t = (y + Lh / 2) / Lh
+        half = 2.25 * (1 - max(0.0, (t - 0.60) / 0.40) ** 1.7) * (1 - 0.12 * max(0.0, (0.12 - t) / 0.12))
+        deck = 3.3 + 0.7 * max(0.0, t - 0.7) ** 1.3 * 3
+        a = u                                                           # -pi/2 (port deck) .. pi/2 (starboard deck)
+        x = half * math.sin(a) * (0.85 + 0.15 * abs(math.sin(a)))      # flare toward the deck
+        z = lerp(-1.6 * (1 - 0.5 * t), deck, abs(math.sin(a)) ** 1.6)
+        return V((x, y, z))
+    P["hull"].add(grid(hull, lin(-math.pi / 2, math.pi / 2, 18), lin(0, 1, 28)))
+    P["hull"].add(grid(lambda u, v, i, j: V((lerp(-2.2, 2.2, u) * (1 - max(0.0, (v - 0.60) / 0.40) ** 1.7),
+                                               lerp(-Lh / 2, Lh / 2, v), 3.3 + 2.1 * max(0.0, v - 0.7) ** 1.3)),
+                       lin(0, 1, 2), lin(0, 1, 28)))                    # deck
+    bow = [V((s * 2.2 * (1 - max(0.0, (t - 0.60) / 0.40) ** 1.7), lerp(-Lh / 2, Lh / 2, t),
+              3.3 + 2.1 * max(0.0, t - 0.7) ** 1.3)) for s in (-1, 1) for t in lin(0.62, 0.99, 6)]
+    P["rails"].add(railing(bow[:6], 1.0, 1.0, 0.035))
+    P["rails"].add(railing(bow[6:], 1.0, 1.0, 0.035))
+    # deckhouse (two levels) and bridge
+    for (w, y0, y1, z0, z1) in ((4.0, -7.0, 2.2, 3.3, 5.0), (3.5, -5.0, 1.4, 5.0, 6.1)):
+        P["house"].add(L.box(w, y1 - y0, z1 - z0).translate((0.0, (y0 + y1) / 2, (z0 + z1) / 2)))
+    for k in range(5):                                                  # front window band of the lower deckhouse
+        P["glass"].add(L.box(0.55, 0.06, 0.45).translate((-1.4 + 0.7 * k, 2.23, 4.45)))
+    for s in (-1, 1):
+        for k in range(4):
+            P["glass"].add(L.box(0.06, 0.6, 0.45).translate((s * 2.03, -5.8 + 1.8 * k, 4.45)))
+    P["glass"].add(L.box(3.1, 0.06, 0.55).translate((0.0, 1.43, 5.65)))  # bridge windscreen
+    for s in (-1, 1):
+        P["glass"].add(L.box(0.06, 2.4, 0.5).translate((s * 1.78, -0.6, 5.65)))
+    top = [V((-1.75, 1.4, 6.1)), V((1.75, 1.4, 6.1)), V((1.75, -5.0, 6.1)), V((-1.75, -5.0, 6.1)), V((-1.75, 1.4, 6.1))]
+    P["rails"].add(railing(top, 0.9, 1.0, 0.03))
+    P["house"].add(L.tube([V((0, -6.2, 5.0)), V((0, -6.3, 7.3))], 0.42, 12))   # exhaust stack
+    P["house"].add(L.tube([V((0, -2.4, 6.1)), V((0, -2.5, 8.25))], 0.10, 8))   # mast
+    P["house"].add(L.box(1.8, 0.10, 0.10).translate((0, -2.45, 7.2)))         # yard
+    P["house"].add(L.box(1.3, 0.25, 0.12).translate((0, -2.45, 7.75)))        # radar bar
+    P["house"].add(L.box(0.6, 0.6, 0.5).translate((1.1, -3.6, 6.35)))         # searchlight / box
+    for xp in (-1.0, 1.0):                                                    # foredeck posts
+        P["house"].add(L.tube([V((xp, 6.5, 3.35)), V((xp, 6.5, 5.0))], 0.08, 6))
+    return P
 
 
 # --- environment -------------------------------------------------------------------------------------------
@@ -612,14 +676,19 @@ def build_environment(sc):
     put("Quay_Lamp_Warm_Dots", warm, mat_emit("Quay_Lamp_Warm", (0.92, 0.80, 0.62), 4.0), shadow=False)
 
     # ------------------------------------------------------------------ materials of the vessels (hazed)
-    sub_black = fog_wrap(mat_paint("Submarine_Anechoic_Black", (0.002, 0.004, 0.006), rough=0.30, metal=0.1,
-                                   streak=0.2, rust=0.0), max_fac=0.10)
+    sub_black = fog_wrap(mat_paint("Submarine_Anechoic_Black", (0.0018, 0.0028, 0.0045), rough=0.5, metal=0.0,
+                                   streak=0.3, rust=0.0), max_fac=0.10)
     boat_dark = fog_wrap(mat_paint("Patrol_Boat_Hull", (0.010, 0.012, 0.015), rough=0.5), max_fac=0.22)
-    boat_house = fog_wrap(mat_paint("Patrol_Boat_Wheelhouse", (0.030, 0.035, 0.040), rough=0.5), max_fac=0.22)
+    boat_house = fog_wrap(mat_paint("Patrol_Boat_Superstructure", (0.050, 0.058, 0.066), rough=0.5, streak=0.3),
+                          max_fac=0.22)
+    boat_glass = fog_wrap(mat_paint("Patrol_Boat_Windows", (0.004, 0.005, 0.007), rough=0.08, metal=0.0, streak=0.0,
+                                    rust=0.0), max_fac=0.22)
     ship_hull = fog_wrap(mat_paint("Warship_Hull_Haze_Grey", (0.008, 0.011, 0.014), rough=0.5), max_fac=0.14)
     ship_super = fog_wrap(mat_paint("Warship_Superstructure", (0.060, 0.075, 0.088), rough=0.5, streak=0.25),
                           max_fac=0.18)
     ship_dark = fog_wrap(mat_paint("Warship_Mast_Dark", (0.010, 0.012, 0.018), rough=0.5, streak=0.1), max_fac=0.18)
+    ship_glass = fog_wrap(mat_paint("Warship_Window_Glass", (0.003, 0.004, 0.006), rough=0.1, metal=0.0, streak=0.0,
+                                    rust=0.0), max_fac=0.18)
     crane_mat = fog_wrap(mat_paint("Crane_Breakwater_Dark", (0.008, 0.011, 0.016), rough=0.6, streak=0.1),
                          max_fac=0.20)
     heli_mat = fog_wrap(mat_paint("Helicopter_Navy_Grey", (0.11, 0.13, 0.16), rough=0.36, metal=0.25,
@@ -647,9 +716,11 @@ def build_environment(sc):
         t = ln * math.copysign(abs(ca) ** 0.7, ca) * (1.0 if ca > 0 else 1.2)
         return s_c + back * t + side * (w * math.copysign(abs(sa) ** 0.6, sa)) + V((0, 0, 3.8 * v))
     sub.add(grid(sl, lin(0, TAU, 32), lin(0, 1, 6), closed_u=True, pole_v1=True))
-    for (dt, h, rr) in ((-1.4, 1.2, 0.16), (0.2, 1.8, 0.14), (1.6, 0.9, 0.2)):     # periscopes and masts
-        p0 = s_c + back * dt * 0.7 + V((0, 0, 3.75))
-        sub.add(L.tube([p0, p0 + V((0, 0, h))], rr, 8))
+    for dt in (-1.3, 1.0):                                       # two rounded periscope fairings on the sail
+        p0 = s_c + back * dt + V((0, 0, 3.7))
+        sub.add(L.lathe([(0.0, 0.0), (0.55, 0.0), (0.55, 0.85), (0.42, 1.08), (0.0, 1.15)], 20).translate(p0))
+    p0 = s_c + back * -1.3 + V((0, 0, 4.85))
+    sub.add(L.tube([p0, p0 + V((0, 0, 1.4))], 0.09, 8))         # thin mast
     sub.add(L.box(3.0, 0.8, 0.12).transform(Matrix.Translation(s_c + back * -1.2 + V((0, 0, 2.6))) @
                                             Matrix.Rotation(heading + math.pi / 2, 4, "Z")))   # sail planes
     st = bow_c + back * 52.0
@@ -662,32 +733,16 @@ def build_environment(sc):
     glint.add(L.uv_sphere(0.18, 10, 6).translate(bow_c + V((1.9, -1.6, 1.5))))
     put("Submarine_Bow_Glint", glint, mat_emit("Sub_Bow_Light", (0.85, 0.78, 0.74), 18.0), shadow=False)
 
-    # ------------------------------------------------------------------ patrol boat (between FRONT and LEFT), bow-on
-    pb = MD()
-    pbc = V((-6.5, 187.0, 0.0))
-    yaw = math.radians(15.0)
-    fwd = V((math.sin(yaw), -math.cos(yaw), 0.0))      # bow direction: toward the camera, slightly right
-    sd = fwd.cross(V((0, 0, 1))).normalized()
-    for sgn in (1, -1):
-        pb.add(grid(lambda u, v, i, j, sgn=sgn: pbc + fwd * (22.0 * (v - 0.5)) +
-                    sd * (sgn * 2.25 * (1 - max(0.0, (v - 0.62) / 0.38) ** 1.6) * math.cos(u) ** 0.7) +
-                    V((0, 0, lerp(-1.6, 1.82 + 0.6 * max(0.0, v - 0.7), math.sin(u)))),
-                    lin(0.0, math.pi / 2, 6), lin(0, 1, 16), flip=(sgn < 0)))
-    whc = pbc + fwd * 1.0
-    for (w_, l_, z0, z1) in ((4.0, 6.0, 1.82, 3.0), (3.6, 4.8, 3.0, 4.62)):
-        pb.add(L.box(w_, l_, z1 - z0).transform(Matrix.Translation(whc + V((0, 0, (z0 + z1) / 2))) @
-                                                Matrix.Rotation(yaw, 4, "Z")))
-    pb.add(L.tube([whc + V((0, 0, 4.62)), whc + V((0, 0, 6.72))], 0.12, 8))
-    pb.add(L.box(1.6, 0.1, 0.1).transform(Matrix.Translation(whc + V((0, 0, 5.23))) @ Matrix.Rotation(yaw, 4, "Z")))
-    for xpost in (-7.88, -6.06):
-        pb.add(L.tube([V((xpost, 186.0, 1.8)), V((xpost, 186.0, 5.1))], 0.08, 6))
-    pb.add(L.box(1.4, 6.0, 3.0).translate((-4.05, 189.0, 0.0)))          # second small craft's dark bow
-    put("Patrol_Boat", pb, boat_dark, smooth_=False)
-    pw = MD()
-    for k in range(5):
-        pw.add(L.box(0.5, 0.05, 0.5).transform(Matrix.Translation(whc + fwd * 2.42 + sd * (-1.5 + 0.75 * k) +
-                                                                  V((0, 0, 3.35))) @ Matrix.Rotation(yaw, 4, "Z")))
-    put("Patrol_Boat_Windows", pw, boat_house, smooth_=False)
+    # ------------------------------------------------------------------ patrol boat / tug (between FRONT and LEFT), bow-on
+    parts = patrol_boat_parts()
+    pm = Matrix.Translation((-6.5, 187.0, WATER_Z)) @ Matrix.Rotation(math.radians(195.0), 4, "Z")
+    for key, mat, sm in (("hull", boat_dark, False), ("house", boat_house, False), ("glass", boat_glass, False),
+                         ("rails", boat_dark, False)):
+        put("Patrol_Boat_" + key.capitalize(), parts[key].transform(pm), mat, smooth_=sm)
+    sc2 = MD()
+    sc2.add(L.box(1.4, 6.0, 3.0).translate((-4.05, 189.0, 0.0)))          # second small craft's dark bow
+    sc2.add(L.box(1.0, 3.0, 1.2).translate((-4.0, 190.5, 2.0)))
+    put("Small_Craft", sc2, boat_dark, smooth_=False)
     bl = MD()
     bl.add(L.uv_sphere(0.25, 12, 8).translate((-6.15, 186.7, -0.88)))
     put("Patrol_Boat_Bow_Light", bl, mat_emit("Bow_Light_Cool", (0.90, 0.96, 0.97), 8.0), shadow=False)
@@ -716,21 +771,47 @@ def build_environment(sc):
     deck = [(712, 474), (720, 468), (760, 452), (830, 432), (900, 412), (970, 398), (1050, 392), (1144, 388),
             (1260, 386)]
     put("Warship_Hull", screen_poly(deck + [(1260, 516), (735, 516)], D, 18.0), ship_hull, smooth_=False)
-    sup = MD()
-    for (xa, xb, ya, yb) in ((830, 1050, 375, 402), (845, 1010, 352, 376), (870, 962, 330, 353), (905, 945, 318, 331),
-                             (1000, 1092, 345, 393), (790, 830, 410, 436)):
-        sup.add(screen_box(xa, xb, ya, yb, D - 4.0, 10.0))
+    # superstructure tiers (screen boxes at slightly different depths so their side faces catch the rims)
+    sup, glass, rails, dark = MD(), MD(), MD(), MD()
+    tiers = ((838, 1010, 372, 404, D - 6.0, 14.0), (850, 985, 350, 372, D - 8.0, 11.0), (868, 960, 333, 350, D - 9.0, 9.0),
+             (900, 948, 322, 333, D - 10.0, 7.0), (1000, 1092, 345, 393, D - 6.0, 12.0), (790, 835, 408, 432, D - 5.0, 8.0))
+    for (xa, xb, ya, yb, dd, dep) in tiers:
+        sup.add(screen_box(xa, xb, ya, yb, dd, dep))
+        for xr in range(int(xa) + 1, int(xb), 3):                      # railing posts + top rail on each tier
+            rails.add(screen_post(xr, ya - 2.4, ya, dd - 0.2, 0.35))
+        rails.add(screen_box(xa, xb, ya - 2.6, ya - 2.2, dd - 0.2, 0.2))
+        h_ = yb - ya
+        rows = [ya + h_ * f for f in ((0.35,) if h_ < 20 else (0.3, 0.65))]
+        for yw in rows:                                                  # window rows
+            for xw in range(int(xa) + 3, int(xb) - 3, 5):
+                glass.add(screen_box(xw, xw + 2.2, yw, yw + 2.4, dd - 0.15, 0.1))
+    dark.add(screen_box(960, 985, 314, 350, D - 12.0, 6.0))             # funnel
+    dark.add(screen_box(958, 987, 312, 316, D - 12.2, 6.4))
+    for (xl_, yl_) in ((858, 396), (938, 396), (1012, 386)):            # lifeboats under davits
+        sup.add(screen_box(xl_, xl_ + 20, yl_, yl_ + 6, D - 6.6, 2.5))
     put("Warship_Superstructure", sup, ship_super, smooth_=False)
+    put("Warship_Windows_Dark", glass, ship_glass, smooth_=False)
+    put("Warship_Railings", rails, ship_dark, smooth_=False)
+    put("Warship_Funnel", dark, ship_dark, smooth_=False)
+    band = MD()                                                          # lighter sheer band under the deck edge
+    for (xa, ya), (xb, yb) in zip(deck, deck[1:]):
+        band.add(screen_poly([(xa, ya + 1.0), (xb, yb + 1.0), (xb, yb + 4.0), (xa, ya + 4.0)], D - 0.3, 0.2))
+    put("Warship_Sheer_Band", band, ship_super, smooth_=False)
     dk = MD()
     dk.add(screen_post(899, 140, 330, D - 2.0, 12.5))
     dk.add(screen_box(884, 914, 148, 154, D - 2.0, 3.0))           # platform
     dk.add(screen_box(890, 908, 183, 187, D - 2.0, 2.0))           # bracket
+    dk.add(screen_box(872, 926, 203, 205, D - 2.0, 1.0))           # yardarm
+    dk.add(screen_box(886, 912, 238, 243, D - 2.0, 3.0))           # lower platform
+    dk.add(screen_box(890, 908, 138, 145, D - 2.5, 2.0))           # radar
+    for (xa_, ya_, yb_) in ((893, 120, 140), (905, 126, 140), (930, 296, 322), (940, 300, 322)):
+        dk.add(screen_post(xa_, ya_, yb_, D - 2.0, 1.2))               # antennas
     for xk in (748, 761):
         dk.add(screen_post(xk, 407, 466, D - 30.0, 2.5))
     dk.add(screen_box(746, 763, 427, 430, D - 30.0, 1.0))
-    for xr in range(724, 1144, 7):                                  # deck railing posts
+    for xr in range(724, 1144, 4):                                  # deck railing posts
         yr = [y for (x, y) in deck if x <= xr][-1]
-        dk.add(screen_post(xr, yr - 5, yr, D - 6.0, 0.8))
+        dk.add(screen_post(xr, yr - 3.5, yr, D - 6.0, 0.6))
     put("Warship_Mast_Kingposts", dk, ship_dark, smooth_=False)
     far = MD()
     far.add(screen_box(1085, 1300, 400, 512, 620.0, 16.0))
@@ -743,7 +824,7 @@ def build_environment(sc):
     win = MD()
     for (wx, wy, d_) in ((867, 336, D - 9.0), (872, 374, D - 9.0), (880, 376, D - 9.0), (1104, 368, 619.0),
                          (930, 366, D - 9.0), (960, 366, D - 9.0), (985, 388, D - 9.0)):
-        win.add(L.uv_sphere(0.6, 8, 5).translate(sheet_pt(wx, wy, d_)))
+        win.add(L.uv_sphere(0.35, 8, 5).translate(sheet_pt(wx, wy, d_)))
     put("Ship_Windows", win, windows, shadow=False)
 
     # ------------------------------------------------------------------ helicopter hovering top right (nose-up flare)
@@ -782,21 +863,39 @@ def build_environment(sc):
     put("Helicopter_Nose_Light", nl, mat_emit("Heli_Nose_Light", (0.85, 0.72, 0.69), 30.0), shadow=False)
 
     # ------------------------------------------------------------------ fjord mountains (right), 5 km
+    # a real heightfield (slopes, buttresses and gullies that take the sun rig) whose crest projects exactly onto the
+    # sheet's ridge line; the left flank runs down to the water behind the BACK figure
     Dm = 5000.0
-    ridge = [(780, 470), (812, 380), (830, 300), (846, 236), (852, 226), (860, 218), (870, 213), (880, 205),
-             (885, 202), (910, 198), (920, 193), (928, 190), (960, 192), (1000, 188), (1040, 190), (1070, 186),
-             (1100, 184), (1104, 182), (1112, 185), (1120, 188), (1128, 184), (1136, 179), (1144, 178),
-             (1200, 172), (1300, 176), (1420, 168)]
+    km = Dm / CAM_D
+    ridge = [(760, 505), (790, 470), (812, 380), (830, 300), (846, 236), (852, 226), (860, 218), (870, 213),
+             (880, 205), (885, 202), (910, 198), (920, 193), (928, 190), (960, 192), (1000, 188), (1040, 190),
+             (1070, 186), (1100, 184), (1104, 182), (1112, 185), (1120, 188), (1128, 184), (1136, 179), (1144, 178),
+             (1200, 172), (1300, 176), (1420, 168), (1600, 180)]
 
     def ry(x):
+        if x <= ridge[0][0]:
+            return 510.0
         for (xa, ya), (xb, yb) in zip(ridge, ridge[1:]):
             if x <= xb:
                 return lerp(ya, yb, (x - xa) / (xb - xa))
         return ridge[-1][1]
 
-    def mtn(u, v, i, j):
-        y = lerp(ry(u) + 1.5 * L.fbm(V((u * 0.15, 0.3, 1.0))), 508.0, v)
-        d = Dm + 220.0 * (1 - v) + 120.0 * L.fbm(V((u * 0.05, v * 2.0, 4.0)))
-        return sheet_pt(u, y, d)
-    put("Mountains", grid(mtn, lin(780, 1420, 220), lin(0, 1, 18)),
-        fog_wrap(mat_rock(), scale=2400.0, max_fac=0.72, top=3000.0, top_keep=0.85))
+    def crest(X):
+        x = MID_X + PX_M * X / km
+        jag = 55.0 * abs(L.fbm(V((X / 38.0, 0.5, 3.0)), 4)) - 20.0 * L.fbm(V((X / 11.0, 1.5, 5.0)), 2)
+        return max(WATER_Z, EYE + ((SOLE_Y - ry(x)) / PX_M - EYE) * km - jag)
+
+    yc = Dm - CAM_D
+
+    def terrain(u, v, i, j):
+        X, Y = u, v
+        H = crest(X) - WATER_Z
+        dy = Y - yc
+        prof = math.exp(-(dy / 950.0) ** 2) if dy < 0 else math.exp(-(dy / 700.0) ** 2)
+        gul = abs(L.fbm(V((X / 55.0, Y / 260.0, 2.0)), 5))                 # gullies running down the slopes
+        bump = L.fbm(V((X / 180.0, Y / 180.0, 7.0)), 4)
+        z = H * prof * (1.0 - 0.45 * gul * (1 - prof) ** 0.5) + 0.10 * H * bump * (1 - prof)
+        return V((X, Y, WATER_Z + max(0.0, z)))
+    mts = grid(terrain, lin(150.0, 1350.0, 420), lin(yc - 2600.0, yc + 1500.0, 110))
+    put("Mountains", mts, fog_wrap(mat_rock(), fog_col=(0.105, 0.130, 0.175), scale=2400.0, max_fac=0.55, top=3000.0,
+                                   top_keep=0.85))
