@@ -77,7 +77,7 @@ def mat_suit(name="Suit_Drysuit_Black", base=(0.010, 0.011, 0.014), line=(0.105,
     cr = nb.noise(obj, 90.0, 4, 0.6)
     h = nb.math("ADD", nb.math("MULTIPLY", wv.outputs["Fac"], 0.25), nb.math("MULTIPLY", cr.outputs["Fac"], 0.6))
     h = nb.math("ADD", h, nb.math("MULTIPLY", lines, 0.15))  # printed lines sit slightly proud
-    p = nb.principled(Base_Color=col, Roughness=rough, Specular_IOR_Level=0.5, Sheen_Weight=0.35,
+    p = nb.principled(Base_Color=col, Roughness=rough, Specular_IOR_Level=0.5, Sheen_Weight=0.2,
                       Sheen_Roughness=0.4, Sheen_Tint=(0.45, 0.5, 0.6), Coat_Weight=nb.math("MULTIPLY", wet, 0.35),
                       Coat_Roughness=0.12, Normal=nb.bump(h, 0.25, 0.0008))
     nb.output(p.outputs[0])
@@ -110,9 +110,10 @@ def mat_nylon(name="Nylon_Cordura_Black", base=(0.016, 0.016, 0.018), light=(0.0
 
 
 def mat_nylon_camo(name="Nylon_Camo_Black", base=(0.020, 0.021, 0.022), blot1=(0.040, 0.042, 0.037),
-                   blot2=(0.062, 0.062, 0.055), tiles=3.0):
-    """Multicam-Black style Cordura for the plate carrier and pouches: charcoal with olive-grey blotches, weave,
-    scuffed edges and damp patches that turn it glossy."""
+                   blot2=(0.062, 0.062, 0.055), line=(0.11, 0.10, 0.085), tiles=3.0, line_amt=0.85,
+                   edge_col=(0.10, 0.097, 0.088)):
+    """Multicam-Black style printed Cordura for the plate carrier and pouches: charcoal ground, olive-grey
+    blotches, pale grey-tan swirl linework and fleck print, weave, scuffed light edges and glossy damp patches."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
@@ -123,21 +124,30 @@ def mat_nylon_camo(name="Nylon_Camo_Black", base=(0.020, 0.021, 0.022), blot1=(0
     col = nb.mix(nb.math("MULTIPLY", sep.outputs[1], 0.9), base, blot1)
     n2 = nb.noise(obj, 22.0, 4, 0.6)
     col = nb.mix(nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.55, 0.0), (0.72, 1.0)]), 0.8), col, blot2)
-    col = nb.mix(nb.math("MULTIPLY", sep.outputs[0], 0.5), col, (0.010, 0.010, 0.011))
+    # second, finer print layer (rotated tiling) so neighbouring pouches don't repeat the same swirl
+    camo2 = tri_rgb(nb, "suit_camo.png", nb.mapping(obj, (1.0, 1.0, 1.0), loc=(0.37, 0.11, 0.23), rot=(0.0, 0.0, 0.9)), tiles * 2.3)
+    sep2 = nb.n("ShaderNodeSeparateXYZ", (-700, 500))
+    nb.link(camo2, sep2.inputs[0])
+    ln = nb.math("MAXIMUM", sep.outputs[0], nb.math("MULTIPLY", sep2.outputs[0], 0.7))
+    col = nb.mix(nb.math("MULTIPLY", ln, line_amt), col, line)
+    fl = nb.noise(obj, 160.0, 3, 0.5)
+    fleck = nb.ramp(fl.outputs["Fac"], [(0.60, 0.0), (0.68, 1.0)])
+    col = nb.mix(nb.math("MULTIPLY", fleck, 0.45), col, tuple(c * 0.8 for c in line))
     weave = tri_rgb(nb, "webbing.png", obj, 16.0)
     wsep = nb.n("ShaderNodeSeparateXYZ", (-700, 400))
     nb.link(weave, wsep.inputs[0])
     bv = _bevel(nb, 0.003)
     en = nb.noise(obj, 40.0, 4, 0.6)
     edge = nb.math("MULTIPLY", _hard_edges(nb, bv, 0.02, 0.12), nb.ramp(en.outputs["Fac"], [(0.4, 0.0), (0.6, 1.0)]))
-    col = nb.mix(nb.math("MULTIPLY", edge, 0.7), col, (0.11, 0.11, 0.10))
+    col = nb.mix(nb.math("MULTIPLY", edge, 0.8), col, edge_col)
     wet = _wet(nb, obj, 2.6)
-    col = nb.mix(nb.math("MULTIPLY", wet, 0.4), col, (0.010, 0.010, 0.011))
+    col = nb.mix(nb.math("MULTIPLY", wet, 0.35), col, (0.010, 0.010, 0.011))
     ao = _ao(nb, 0.025)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.003, 0.003, 0.003))
+    h = nb.math("ADD", wsep.outputs[0], nb.math("MULTIPLY", ln, 0.5))
     p = nb.principled(Base_Color=col, Roughness=nb.mixf(wet, 0.62, 0.30), Specular_IOR_Level=0.5,
                       Sheen_Weight=0.35, Coat_Weight=nb.math("MULTIPLY", wet, 0.4), Coat_Roughness=0.15,
-                      Normal=nb.bump(wsep.outputs[0], 0.35, 0.0006, normal=bv))
+                      Normal=nb.bump(h, 0.35, 0.0006, normal=bv))
     nb.output(p.outputs[0])
     m.diffuse_color = (*base, 1)
     return m
@@ -275,13 +285,15 @@ def build_materials():
     M["screen"] = mat_screen()
     M["patch_flag"] = mat_patch()
     M["helmet"] = mat_polymer("Helmet_Shell_Cover", base=(0.026, 0.027, 0.030), rough=0.55, grain=900.0)
-    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.022, 0.022, 0.023), blot1=(0.050, 0.048, 0.044),
-                                     blot2=(0.105, 0.098, 0.090))
-    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.033, 0.029, 0.024), blot1=(0.065, 0.057, 0.048),
-                                    blot2=(0.140, 0.122, 0.105))
-    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.013, 0.014, 0.017), blot1=(0.030, 0.033, 0.038),
-                                    blot2=(0.060, 0.065, 0.072))
-    M["carrier"] = mat_nylon("Carrier_Cordura", base=(0.008, 0.008, 0.009), light=(0.022, 0.021, 0.020), tiles=16.0)
+    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.012, 0.012, 0.012), blot1=(0.026, 0.025, 0.022),
+                                     blot2=(0.055, 0.052, 0.045), line=(0.13, 0.122, 0.102), tiles=2.6)
+    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.018, 0.016, 0.013), blot1=(0.038, 0.033, 0.027),
+                                    blot2=(0.080, 0.070, 0.057), line=(0.16, 0.145, 0.115), tiles=2.6)
+    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.010, 0.011, 0.012), blot1=(0.020, 0.021, 0.023),
+                                    blot2=(0.040, 0.041, 0.043), line=(0.10, 0.10, 0.096), tiles=2.6)
+    M["carrier"] = mat_nylon_camo("Carrier_Cordura_Print", base=(0.007, 0.007, 0.0072), blot1=(0.014, 0.0135, 0.012),
+                                  blot2=(0.026, 0.025, 0.022), line=(0.070, 0.066, 0.056), tiles=2.2, line_amt=0.7,
+                                  edge_col=(0.060, 0.058, 0.054))
     M["webbing"] = mat_nylon("Webbing_MOLLE", base=(0.012, 0.012, 0.013), light=(0.030, 0.028, 0.026), tiles=24.0)
     M["plastic_light"] = mat_polymer("Plastic_Light_Grey", base=(0.16, 0.15, 0.14), rough=0.45, grain=900.0)
     M["cable_grey"] = mat_rubber("Cable_Coiled_Grey", base=(0.10, 0.10, 0.105), rough=0.40)

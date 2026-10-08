@@ -17,6 +17,7 @@ from seal_vest import frame_dir, pouch
 BELT_A, BELT_B, BELT_E = 0.200, 0.140, 2.3
 BELT_Z0, BELT_Z1 = 0.987, 1.054
 HOLSTER = {}
+GEAR_FRAMES = {}  # pouch / sheath frames that seal_weapons fills with the carried gear
 
 
 # ------------------------------------------------------------------------------------------------- helpers
@@ -308,14 +309,23 @@ def build(coll, root):
         p, x, nn, z = frame_dir(cx, cy, zc, n.x, n.y, d)
         return pouch(tgt[0], tgt[1], trims, grom, p, x, nn, z, w, h, d, flap=flap, **kw)
 
+    GEAR_FRAMES.clear()
     bp(-0.225, 0.000, 1.020, 0.080, 0.130, 0.055, bungee=False)          # right-hip pouch
-    m = bp(-0.205, 0.075, 1.000, 0.070, 0.150, 0.050, bungee=False)      # right-rear pouch + flap buckle
+    m = bp(-0.205, 0.075, 1.000, 0.070, 0.150, 0.050, bungee=False)      # right-rear utility pouch + flap buckle
     ladder_buckle(buckles, m @ V((0, 0.055, 0.050)), (m.to_3x3() @ V((0, 1, 0))).normalized(), w=0.020, h=0.012)
+    # utility-pouch details from the gear card: top grab loop, flat front slip pocket, centre clip tab, stitching
+    straps.add(sweep([m @ V(q) for q in ((-0.020, 0.025, 0.074), (-0.016, 0.025, 0.086), (0.016, 0.025, 0.086),
+                                         (0.020, 0.025, 0.074))], rect_profile(0.004, 0.008), up=m.to_3x3() @ V((0, 1, 0))))
+    pouches.add(box(0.056, 0.006, 0.062).transform(m @ Matrix.Translation((0.0, 0.053, -0.036))))
+    trims.add(box(0.014, 0.004, 0.030).transform(m @ Matrix.Translation((0.0, 0.058, 0.026))))
+    for zz in (-0.004, -0.066):
+        trims.add(box(0.050, 0.0015, 0.0015).transform(m @ Matrix.Translation((0.0, 0.0565, zz))))
     m = bp(-0.120, 0.150, 0.990, 0.120, 0.220, 0.070, flap=0.22, bands=0, bungee=False)  # rear dump pouch
+    GEAR_FRAMES["dump"] = m
     for k in range(6):  # vertical stitched ribs
         trims.add(box(0.003, 0.004, 0.150).transform(m @ Matrix.Translation((-0.050 + k * 0.02, 0.071, -0.025))))
     bp(0.150, 0.130, 1.010, 0.065, 0.110, 0.045, bungee=False, bands=1)  # rear-left rounded pouch
-    bp(0.235, 0.010, 1.000, 0.075, 0.145, 0.060, bungee=False)           # left-hip pouch
+    GEAR_FRAMES["left_hip"] = bp(0.235, 0.010, 1.000, 0.075, 0.145, 0.060, bungee=False)  # left-hip pouch
     cyl_c = V((0.046, 0.155 + 0.018, 1.010))                              # rear marker/flashlight cylinder
     belt_hw.add(lathe([(0.0, -0.0325), (0.020, -0.0325), (0.020, 0.0325), (0.0, 0.0325)], 20)
                 .transform(look_matrix(cyl_c, (1, 0, 0), (0, 0, 1))))
@@ -329,6 +339,7 @@ def build(coll, root):
     outl += [(lerp(-0.030, 0.0, t), lerp(0.040, -0.070, t)) for t in lin(0, 1, 8)[1:]]
     outl += [(lerp(0.0, 0.030, t), lerp(-0.070, 0.040, t)) for t in lin(0, 1, 8)[1:-1]]
     kydex.add(slab(outl, 0.030, tm))
+    GEAR_FRAMES["teardrop"] = tm
     belt_hw.add(lathe([(0.0, 0.0), (0.003, 0.0), (0.003, 0.002), (0.0, 0.0025)], 10).transform(
         tm @ Matrix.Translation((-0.010, 0.031, 0.035)) @ Matrix.Rotation(math.pi / 2, 4, "X") @
         Matrix.Rotation(math.pi, 4, "X")))
@@ -377,6 +388,7 @@ def build(coll, root):
         nv = (mm.to_3x3() @ V((0, 1, 0))).normalized()
         m2 = pouch(pouches, flaps, trims, grom, p, xv, nv, V((0, 0, 1)), 0.060, 0.170, 0.050, flap=0.24, bungee=True,
                    tab=False, bands=0)
+        GEAR_FRAMES.setdefault("left_leg", []).append(m2)
         trims.add(box(0.015, 0.004, 0.015).transform(m2 @ Matrix.Translation((0, 0.055, 0.055))))
     for z_out, z_in in ((0.815, 0.800), (0.725, 0.720)):
         md, bpnt, bn = leg_strap(1, z_out, z_in, 0.025)
@@ -419,9 +431,8 @@ def build(coll, root):
         so = [(0.0175, 0.060), (-0.0175, 0.060), (-0.014, -0.060), (0.014, -0.060)]
         kydex.add(slab(so, 0.022, sm))
         straps.add(box(0.040, 0.015, 0.024).transform(look_matrix(p + n * 0.012 + zv * 0.045, n, zv)))
-        if side < 0:  # knife pommel out of the top of the right sleeve
-            kydex.add(lathe([(0.0, 0.0), (0.012, 0.0), (0.012, 0.022), (0.009, 0.030), (0.0, 0.030)], 16)
-                      .translate(p + n * 0.011 + zv * 0.060))
+        if side < 0:  # the dive knife (seal_weapons) sits in the right sheath, handle up
+            GEAR_FRAMES["knife"] = (p + n * 0.011, n, zv)
 
     # ------------------------------------------------------------------ ribbed crotch gusset
     for k in range(12):

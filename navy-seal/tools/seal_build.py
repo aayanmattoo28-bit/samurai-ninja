@@ -1,4 +1,4 @@
-"""Build the U.S. Navy SEAL character and its night-harbour turnaround set; save navy-seal/navy_seal.blend.
+"""Build the U.S. Navy SEAL character and its harbour turnaround set; save navy-seal/navy_seal.blend.
 
     python navy-seal/tools/seal_build.py [--out path.blend] [--parts body,head,vest,lower,weapons] [--no-env] [--no-save]
 (run with the `bpy` module, or `blender --background --python navy-seal/tools/seal_build.py`)
@@ -69,6 +69,7 @@ def build(o):
     seal_scene.setup_render(sc)
     seal_scene.build_lights(sc)
     seal_scene.build_cameras(sc)
+    seal_scene.build_turnaround(sc)
     if o["env"]:
         seal_scene.build_environment(sc)
     return sc

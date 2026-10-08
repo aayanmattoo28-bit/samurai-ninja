@@ -19,7 +19,7 @@ EDGE = [(0, 1.735), (30, 1.736), (45, 1.744), (60, 1.749), (100, 1.749), (124, 1
 GOG_C = V((0.0, -0.071, 0.0))         # goggle plan-circle centre (x, y)
 GOG_R = 0.100
 REG_C = V((0.0, -0.175, 1.591))       # regulator face centre
-MANIFOLD = {"x0": -0.175, "x1": 0.185, "y": 0.150, "z": 1.615, "r": 0.065}
+MANIFOLD = {"x0": -0.175, "x1": 0.185, "y": 0.150, "z": 1.592, "r": 0.058}
 
 LENSES = MD()
 LENSES_DARK = MD()
@@ -340,24 +340,29 @@ def build(coll, root):
         return Mf["r"] * (0.70 + 0.30 * math.sqrt(max(0.0, cap)))
 
     to_obj("Rebreather_Manifold", L.limb(axis_pts, man_r, 32, ref=(0, 0, 1), cap0=True, cap1=True),
-           M["polymer_gloss"], coll, parent=root)
+           M["rubber"], coll, parent=root)
+    # the hose is coiled over the whole manifold, end domes included, so the hump behind the neck reads ribbed
     hel = []
-    for k in range(4 * 40 + 1):
-        a = TAU * k / 40
-        hel.append(V((lerp(-0.11, 0.11, k / 160), Mf["y"] + 0.078 * math.sin(a), Mf["z"] + 0.078 * math.cos(a))))
-    to_obj("Rebreather_Manifold_Hose_Wrap", corrugated(hel, 0.016, pitch=0.0065, depth=0.0018, n=10), M["rubber"],
+    turns, steps = 11, 40
+    for k in range(turns * steps + 1):
+        t = k / (turns * steps)
+        a = TAU * k / steps
+        rr = man_r(lerp(0.02, 0.98, t), 0.0) + 0.013
+        hel.append(V((lerp(Mf["x0"] + 0.012, Mf["x1"] - 0.012, t), Mf["y"] + rr * math.sin(a),
+                      Mf["z"] + rr * math.cos(a))))
+    to_obj("Rebreather_Manifold_Hose_Wrap", corrugated(hel, 0.0155, pitch=0.0065, depth=0.0018, n=10), M["rubber"],
            coll, parent=root)
     for s in (-1, 1):
         pc = V((0.170 if s > 0 else -0.160, Mf["y"] + 0.040, Mf["z"] + 0.015))
         metal.add(lathe([(0.0, 0.0), (0.020, 0.0), (0.020, 0.010), (0.011, 0.010), (0.011, 0.006), (0.0, 0.006)], 24)
                   .transform(look_matrix(pc, V((s * 0.5, 0.7, 0.4)).normalized(), (0, 0, 1))))
-    tbox(poly, V((0.008, Mf["y"] + 0.072, 1.660)), V((0, 1, 0)), 0.060, 0.030, 0.020)
+    tbox(poly, V((0.008, Mf["y"] + 0.066, Mf["z"] + 0.045)), V((0, 1, 0)), 0.060, 0.030, 0.020)
 
     # ------------------------------------------------------------------------- the main breathing-hose loop
-    P = [V((0.150, 0.075, 1.628)), V((0.180, -0.035, 1.597)), V((0.162, -0.135, 1.546)), V((0.110, -0.176, 1.519)),
+    P = [V((0.150, 0.075, 1.608)), V((0.180, -0.035, 1.590)), V((0.162, -0.135, 1.546)), V((0.110, -0.176, 1.519)),
          V((0.0, -0.204, 1.508))]
     full = P + [V((-p.x, p.y, p.z)) for p in reversed(P[:-1])]
-    hose = corrugated(catmull_path(full, 10), 0.019, pitch=0.0085, depth=0.003, n=18)
+    hose = corrugated(catmull_path(full, 10), 0.0225, pitch=0.0095, depth=0.0034, n=18)
     for p, d in ((full[0], (full[0] - full[1]).normalized()), (full[-1], (full[-1] - full[-2]).normalized())):
         hose.add(lathe([(0.0, -0.022), (0.022, -0.022), (0.023, 0.0), (0.0, 0.0)], 24).transform(look_matrix(p, d)))
     to_obj("Breathing_Hose_Loop", hose, M["rubber"], coll, parent=root)

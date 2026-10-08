@@ -1,23 +1,67 @@
-"""Navy SEAL set: render settings, night-harbour light rig, the four turnaround cameras (FRONT, LEFT, BACK, RIGHT)
-sharing one continuous backdrop, and the harbour environment (wet dock, sea, submarine, ships, helicopter,
-mountains, dusk sky)."""
+"""Navy SEAL set, built as the concept sheet's turnaround: ONE wide, low, level long-lens shot of the wet harbour
+quay in which the same character stands four times (FRONT, LEFT, BACK, RIGHT), in front of one continuous dusk
+panorama -- submarine, patrol boat, crane and breakwater, warship with its tall mast, a hovering helicopter, hazy
+fjord mountains and a warm sunset glow -- with surf breaking on the quay edge and bollard lamps streaking the wet
+dock.  Lights are world-fixed suns, so every figure is cool on its screen-left and warm on its screen-right edges.
+
+Measurements (sheet px of the 1144 x 634 turnaround panel; 322.6 px/m on the figure plane) come from the concept.
+A sheet point (x, y) seen d metres from the camera maps to world with sheet_pt(); every background element is
+placed that way, at the distance chosen for it.
+"""
 import math
+import os
 
 import bpy
-from mathutils import Euler, Matrix, Vector
+from mathutils import Matrix
 
 import seal_lib as L
-from seal_lib import MD, NB, TAU, V, collection, fbm, grid, interp_smooth, lerp, lin, new_mat, smooth, to_obj
+from seal_lib import MD, NB, TAU, V, collection, grid, interp_smooth, lerp, lin, new_mat, to_obj
 
-# --- turnaround layout, measured on the concept sheet (1536 x 1024; the turnaround strip is 630 px tall) -----
-# view -> (panel left edge, figure centre, panel right edge) in sheet pixels
-SHEET_H = 630.0
-PANELS = {"Front": (0, 290, 407), "Left": (407, 525, 637), "Back": (637, 750, 881), "Right": (881, 1013, 1145)}
-STRIP_C = 572.0
-VIEW_YAW = {"Front": 0.0, "Left": 90.0, "Back": 180.0, "Right": -90.0}
-CAM_DIST, CAM_Z, CAM_AIM_Z = 7.0, 0.30, 0.95  # low hero camera: the far sea line sits at boot-top height
-FOCAL = 85.0
-SENSOR = 24.0
+HERE = os.path.dirname(os.path.abspath(__file__))
+TEX_DIR = os.path.join(os.path.dirname(HERE), "textures")
+
+# --- the turnaround shot ------------------------------------------------------------------------------------
+SHEET_W, SHEET_H = 1144.0, 634.0
+PX_M = 322.6                      # sheet px per metre on the figure plane
+SOLE_Y, MID_X = 620.5, 572.0      # sheet row of the sole line, sheet column of the camera axis
+CAM_D, EYE = 13.3, 0.37           # camera distance to the figure plane, eye height (just under the knee pads)
+LENS, SENSOR_W, SHIFT_Y, FSTOP = 135.0, 36.0, 0.161, 8.0
+RES = (2288, 1268)                # 2x the sheet panel
+# view -> (figure X on the dock, rotation about Z)
+FIGURES = {"Front": (-0.852, 0.0), "Left": (-0.155, -90.0), "Back": (0.546, 180.0), "Right": (1.389, 90.0)}
+# view -> panel columns (sheet px); the panels split at the gaps between the figures
+PANELS = {"Front": (0, 441), "Left": (441, 632), "Back": (632, 897), "Right": (897, 1144)}
+
+WATER_Z = -1.5
+# far edge of the quay (world X, Y): it recedes to the right, as the sheet's surf line rises from y 547 to y 523
+QUAY_EDGE = [(-80.0, 20.2), (-4.55, 20.8), (-0.85, 22.3), (0.67, 28.9), (4.30, 50.8), (9.29, 56.4), (80.0, 135.6)]
+
+SKY_D = 8000.0                                # emission card with the sky (make_seal_sky.py)
+SKY_WINDOW = (-200.0, -120.0, 1344.0, 640.0)  # sheet px covered by sky_backdrop.png
+SKY_SCALE = 1.25                              # texture px per sheet px
+SKY_GAIN, SKY_GAMMA = 2.0, 2.2                # linear radiance = SKY_GAIN * texture ** SKY_GAMMA
+
+
+def sheet_pt(x, y, d):
+    """World point that the camera sees at sheet pixel (x, y), d metres away."""
+    k = d / CAM_D
+    return V(((x - MID_X) / PX_M * k, d - CAM_D, EYE + ((SOLE_Y - y) / PX_M - EYE) * k))
+
+
+def to_sheet(p):
+    """Sheet pixel (x, y) of a world point."""
+    k = (p[1] + CAM_D) / CAM_D
+    return MID_X + PX_M * p[0] / k, SOLE_Y - PX_M * (EYE + (p[2] - EYE) / k)
+
+
+def quay_y(x):
+    pts = QUAY_EDGE
+    if x <= pts[0][0]:
+        return pts[0][1]
+    for (x0, y0), (x1, y1) in zip(pts, pts[1:]):
+        if x <= x1:
+            return lerp(y0, y1, (x - x0) / (x1 - x0))
+    return pts[-1][1]
 
 
 def env_root():
@@ -29,30 +73,12 @@ def env_root():
     return e
 
 
-def panel_shift(v):
-    a, c, b = PANELS[v]
-    return (c - STRIP_C) / SHEET_H
-
-
-def place_view(v):
-    """Turn the light rig with the camera, and the environment by the panel's slice of the panorama."""
-    phi = math.radians(VIEW_YAW[v])
-    alpha = math.atan(panel_shift(v) * SENSOR / FOCAL)
-    rig = bpy.data.objects.get("Light_Rig")
-    if rig is not None:
-        rig.rotation_euler[2] = phi
-    env = bpy.data.objects.get("Env_Root")
-    if env is not None:
-        env.rotation_euler = (0, 0, phi + alpha)
-    return bpy.data.objects["CAM_" + v]
-
-
 # --- render settings ---------------------------------------------------------------------------------------
-def setup_render(sc):
+def setup_render(sc, calib=False):
     sc.render.engine = "CYCLES"
     cy = sc.cycles
     cy.device = "CPU"
-    cy.samples = 96
+    cy.samples = 128
     cy.use_denoising = True
     try:
         cy.denoiser = "OPENIMAGEDENOISE"
@@ -70,250 +96,177 @@ def setup_render(sc):
     cy.blur_glossy = 0.5
     cy.sample_clamp_indirect = 6.0
     cy.filter_width = 1.1
-    sc.render.resolution_x, sc.render.resolution_y = 600, 1300
-    sc.view_settings.view_transform = "AgX"
-    try:
-        sc.view_settings.look = "AgX - High Contrast"
-    except Exception:
-        pass
+    sc.render.resolution_x, sc.render.resolution_y = RES
+    sc.render.resolution_percentage = 100
+    # Standard view: the sheet's measured display colours are reproduced directly (lamps and speculars clip to white
+    # and bloom in the compositor, as in the concept)
+    sc.view_settings.view_transform = "Standard"
+    sc.view_settings.look = "None"
     sc.view_settings.exposure = 0.0
     try:
-        compositor(sc)
+        compositor(sc, calib)
     except Exception as e:  # pragma: no cover
         print("compositor skipped:", e)
 
 
-def compositor(sc):
-    """Cool night grade: mild bloom on the lamps and visor, blue shadows, slight vignette."""
+def compositor(sc, calib=False):
+    """Low-key dusk grade: fog-glow bloom on the lamps and visors, navy lift in the shadows, warm gain in the
+    highlights, a little less saturation, and the sheet's vignette (corners and the bottom edge; vignette.png is
+    written by make_seal_sky.py, which also divides it out of the sky).  calib=True leaves out the spatial effects
+    so a flat ramp can be measured."""
     sc.use_nodes = True
     nt = sc.node_tree
     for n in list(nt.nodes):
         nt.nodes.remove(n)
     Lk = nt.links.new
     rl = nt.nodes.new("CompositorNodeRLayers")
-    gl = nt.nodes.new("CompositorNodeGlare")
-    gl.glare_type = "FOG_GLOW"
-    gl.quality = "HIGH"
-    gl.threshold = 0.9
-    gl.size = 8
-    gl.mix = -0.6
+    src = rl.outputs["Image"]
+    if not calib:
+        gl = nt.nodes.new("CompositorNodeGlare")
+        gl.glare_type = "FOG_GLOW"
+        gl.quality = "HIGH"
+        gl.threshold = 1.0
+        gl.size = 7
+        gl.mix = -0.7
+        Lk(src, gl.inputs["Image"])
+        src = gl.outputs["Image"]
     cb = nt.nodes.new("CompositorNodeColorBalance")
     cb.correction_method = "LIFT_GAMMA_GAIN"
-    cb.lift = (0.998, 0.999, 1.006)
-    cb.gamma = (0.995, 1.0, 1.012)
-    cb.gain = (1.0, 1.0, 1.0)
+    cb.lift = (0.985, 0.99, 1.02)
+    cb.gamma = (1.0, 1.0, 1.0)
+    cb.gain = (1.03, 1.0, 0.96)
+    Lk(src, cb.inputs["Image"])
     hs = nt.nodes.new("CompositorNodeHueSat")
-    hs.inputs["Saturation"].default_value = 0.85
-    em = nt.nodes.new("CompositorNodeEllipseMask")
-    em.width, em.height = 1.0, 1.0
-    bl = nt.nodes.new("CompositorNodeBlur")
-    bl.filter_type = "FAST_GAUSS"
-    bl.use_relative = True
-    bl.factor_x = bl.factor_y = 30
-    vg = nt.nodes.new("CompositorNodeMapRange")
-    vg.inputs["To Min"].default_value = 0.70
-    vg.inputs["To Max"].default_value = 1.0
-    mul = nt.nodes.new("CompositorNodeMixRGB")
-    mul.blend_type = "MULTIPLY"
-    mul.inputs["Fac"].default_value = 1.0
-    comp = nt.nodes.new("CompositorNodeComposite")
-    Lk(rl.outputs["Image"], gl.inputs["Image"])
-    Lk(gl.outputs["Image"], cb.inputs["Image"])
+    hs.inputs["Saturation"].default_value = 0.88
     Lk(cb.outputs["Image"], hs.inputs["Image"])
-    Lk(em.outputs["Mask"], bl.inputs["Image"])
-    Lk(bl.outputs["Image"], vg.inputs["Value"])
-    Lk(hs.outputs["Image"], mul.inputs[1])
-    Lk(vg.outputs["Value"], mul.inputs[2])
-    Lk(mul.outputs["Image"], comp.inputs["Image"])
+    src = hs.outputs["Image"]
+    if not calib and os.path.exists(os.path.join(TEX_DIR, "vignette.png")):
+        vi = nt.nodes.new("CompositorNodeImage")
+        vi.image = L.image("vignette.png", "Non-Color")
+        scl = nt.nodes.new("CompositorNodeScale")
+        scl.space = "RENDER_SIZE"
+        scl.frame_method = "STRETCH"
+        Lk(vi.outputs["Image"], scl.inputs["Image"])
+        mul = nt.nodes.new("CompositorNodeMixRGB")
+        mul.blend_type = "MULTIPLY"
+        mul.inputs["Fac"].default_value = 1.0
+        Lk(src, mul.inputs[1])
+        Lk(scl.outputs["Image"], mul.inputs[2])
+        src = mul.outputs["Image"]
+    comp = nt.nodes.new("CompositorNodeComposite")
+    Lk(src, comp.inputs["Image"])
 
 
-# --- sky ---------------------------------------------------------------------------------------------------
-def world(sc, follow):
-    """Overcast night-into-dusk sky: deep slate blue overhead, a pale lilac/peach glow low on the right of the
-    strip (behind the BACK/RIGHT panels), streaky storm clouds.  Locked to the environment's yaw."""
-    w = bpy.data.worlds.new("Harbour_Night_Sky")
+# --- world (lighting / reflections only; the camera sees the sky card) -------------------------------------
+def world(sc):
+    """Overcast dusk dome: slate zenith, blue-grey horizon, the peach glow toward the setting sun (+X +Y), dark
+    below the horizon."""
+    w = bpy.data.worlds.new("Harbour_Dusk_Dome")
     sc.world = w
     nb = NB(w)
     tc = nb.n("ShaderNodeTexCoord", (-1200, 0))
-    rot = nb.n("ShaderNodeMapping", (-1000, 0))
-    rot.vector_type = "VECTOR"
-    nb.link(tc.outputs["Generated"], rot.inputs["Vector"])
-    fc = rot.inputs["Rotation"].driver_add("default_value", 2)
-    var = fc.driver.variables.new()
-    var.name = "r"
-    var.type = "TRANSFORMS"
-    var.targets[0].id = follow
-    var.targets[0].transform_type = "ROT_Z"
-    var.targets[0].transform_space = "WORLD_SPACE"
-    fc.driver.expression = "-r"
-    d = rot.outputs["Vector"]
-    sep = nb.n("ShaderNodeSeparateXYZ", (-800, 0))
+    d = tc.outputs["Generated"]
+    sep = nb.n("ShaderNodeSeparateXYZ", (-1000, 0))
     nb.link(d, sep.inputs[0])
-    sky = nb.ramp(sep.outputs[2], [(0.0, (0.030, 0.036, 0.050)), (0.03, (0.20, 0.22, 0.30)), (0.10, (0.15, 0.17, 0.26)),
-                                   (0.30, (0.075, 0.090, 0.150)), (1.0, (0.020, 0.026, 0.050))])
-    # dusk glow toward +X+Y (behind the right side of the strip)
+    col = nb.ramp(sep.outputs[2], [(0.0, (0.010, 0.014, 0.020)), (0.02, (0.112, 0.162, 0.246)),
+                                   (0.25, (0.050, 0.075, 0.120)), (1.0, (0.023, 0.042, 0.073))])
     dp = nb.n("ShaderNodeVectorMath", (-800, -300))
     dp.operation = "DOT_PRODUCT"
     nb.link(d, dp.inputs[0])
-    dp.inputs[1].default_value = (0.276, 0.961, 0.0)  # +16 deg: just beyond the right edge of the strip
-    lobe = nb.math("MULTIPLY", nb.math("POWER", nb.math("MAXIMUM", dp.outputs["Value"], 0.0), 60.0),
-                   nb.ramp(sep.outputs[2], [(0.0, 1.0), (0.30, 0.0)]))
-    sky = nb.mix(nb.math("MULTIPLY", lobe, 1.0), sky, (0.95, 0.72, 0.62), "ADD")
-    mp = nb.mapping(d, (1.0, 1.0, 5.0))
-    cl = nb.noise(mp, 2.6, 12, 0.62, distortion=0.9)
-    cloud = nb.math("MULTIPLY", nb.ramp(cl.outputs["Fac"], [(0.40, 0.0), (0.62, 1.0)]),
-                    nb.ramp(sep.outputs[2], [(0.02, 0.0), (0.09, 1.0)]))
-    ccol = nb.mix(lobe, (0.20, 0.22, 0.30), (0.62, 0.52, 0.56))
-    col = nb.mix(nb.math("MULTIPLY", cloud, 0.75), sky, ccol)
-    dark = nb.noise(nb.mapping(d, (1.0, 1.0, 3.0)), 1.4, 6, 0.6)
-    col = nb.mix(nb.math("MULTIPLY", nb.ramp(dark.outputs["Fac"], [(0.45, 0.0), (0.7, 1.0)]), 0.6), col,
-                 (0.03, 0.035, 0.055))
-    bg_cam = nb.n("ShaderNodeBackground", (200, 100))
-    nb.link(col, bg_cam.inputs["Color"])
-    bg_cam.inputs["Strength"].default_value = 1.0
-    bg_lit = nb.n("ShaderNodeBackground", (200, -100))
-    nb.link(col, bg_lit.inputs["Color"])
-    bg_lit.inputs["Strength"].default_value = 0.30
-    lp = nb.n("ShaderNodeLightPath", (0, 300))
-    fac = nb.math("MAXIMUM", lp.outputs["Is Camera Ray"], lp.outputs["Is Glossy Ray"])
-    mx = nb.n("ShaderNodeMixShader", (400, 0))
-    nb.link(fac, mx.inputs[0])
-    nb.link(bg_lit.outputs[0], mx.inputs[1])
-    nb.link(bg_cam.outputs[0], mx.inputs[2])
-    o = nb.n("ShaderNodeOutputWorld", (600, 0))
-    nb.link(mx.outputs[0], o.inputs["Surface"])
+    dp.inputs[1].default_value = (0.75, 0.63, 0.21)
+    glow = nb.math("POWER", nb.math("MAXIMUM", dp.outputs["Value"], 0.0), 6.0)
+    col = nb.mix(nb.math("MULTIPLY", glow, nb.ramp(sep.outputs[2], [(-0.02, 0.0), (0.0, 1.0), (0.5, 0.2)])), col,
+                 (0.479, 0.386, 0.392))
+    bg = nb.n("ShaderNodeBackground", (200, 0))
+    nb.link(col, bg.inputs["Color"])
+    bg.inputs["Strength"].default_value = 1.0
+    o = nb.n("ShaderNodeOutputWorld", (400, 0))
+    nb.link(bg.outputs[0], o.inputs["Surface"])
 
 
 # --- lights ------------------------------------------------------------------------------------------------
-def area(name, coll, loc, target, power, color, size, parent, spread=None, shape="DISK"):
-    ld = bpy.data.lights.new(name, "AREA")
-    ld.energy = power
+def sun(coll, name, toward, strength, color, angle):
+    ld = bpy.data.lights.new(name, "SUN")
+    ld.energy = strength
     ld.color = color
-    ld.shape = shape
-    ld.size = size
-    if spread is not None:
-        ld.spread = math.radians(spread)
+    ld.angle = math.radians(angle)
     ob = bpy.data.objects.new(name, ld)
     coll.objects.link(ob)
-    ob.location = loc
-    ob.rotation_euler = (V(target) - V(loc)).to_track_quat("-Z", "Y").to_euler()
-    ob.parent = parent
+    v = V(toward).normalized()
+    ob.location = V((0.27, 0.0, 1.0)) + v * 4.0
+    ob.rotation_euler = (-v).to_track_quat("-Z", "Y").to_euler()
     return ob
 
 
-def link_light(ob, receivers):
-    try:
-        ob.light_linking.receiver_collection = receivers
-    except Exception as e:  # pragma: no cover
-        print("light linking unavailable:", e)
-
-
 def build_lights(sc):
+    """World-fixed sun rig measured from the sheet: warm-neutral key front-right-high, cool moonlit fill
+    front-left, strong low peach rim from the sunset behind-right, blue sky rim behind-left."""
     coll = collection("Lighting")
-    rig = bpy.data.objects.new("Light_Rig", None)
-    coll.objects.link(rig)
-    world(sc, env_root())
-    char = bpy.data.collections.get("NavySeal_Character")
-    c = (0, 0, 1.1)
-    # cool moonlit key high front-left, soft blue fill, white-blue rims that trace the wet edges
-    area("Key_Moon", coll, (-3.0, -4.2, 5.0), c, 480, (0.86, 0.90, 1.0), 1.6, rig)
-    lk = [area("Fill_Blue", coll, (4.0, -3.5, 1.6), c, 35, (0.62, 0.70, 0.90), 4.0, rig),
-          area("Rim_Left", coll, (-2.0, 3.4, 3.0), (0, 0, 1.3), 35, (0.75, 0.85, 1.0), 1.4, rig, spread=40),
-          area("Rim_Right", coll, (2.2, 3.2, 2.2), (0, 0, 1.1), 30, (1.0, 0.82, 0.78), 1.4, rig, spread=40),
-          area("Top_Sky", coll, (0.0, 0.8, 5.0), (0, 0, 1.4), 60, (0.78, 0.82, 0.95), 3.0, rig),
-          area("Visor_Kick", coll, (0.3, -2.0, 1.75), (0, 0, 1.69), 4, (0.6, 0.75, 1.0), 0.5, rig)]
-    if char is not None:
-        for ob in lk:
-            link_light(ob, char)
-    return rig
+    world(sc)
+    sun(coll, "Key_Front_Right", (0.53, -0.63, 0.57), 1.4, (0.888, 0.761, 0.658), 12)
+    sun(coll, "Fill_Moon_Front_Left", (-0.64, -0.64, 0.42), 0.5, (0.397, 0.503, 0.716), 30)
+    sun(coll, "Rim_Sunset_Back_Right", (0.75, 0.63, 0.21), 2.2, (0.930, 0.571, 0.371), 6)
+    sun(coll, "Rim_Sky_Back_Left", (-0.61, 0.61, 0.50), 1.4, (0.275, 0.397, 0.672), 10)
 
 
-# --- cameras -----------------------------------------------------------------------------------------------
+# --- camera and the four views -----------------------------------------------------------------------------
 def build_cameras(sc):
     coll = collection("Cameras")
-    first = None
-    for v, yaw in VIEW_YAW.items():
-        cd = bpy.data.cameras.new("CAM_" + v)
-        cd.lens = FOCAL
-        cd.sensor_fit = "VERTICAL"
-        cd.sensor_height = SENSOR
-        cd.clip_start = 0.05
-        cd.clip_end = 3000
-        cd.dof.use_dof = True
-        cd.dof.focus_distance = CAM_DIST
-        cd.dof.aperture_fstop = 4.0
-        ob = bpy.data.objects.new("CAM_" + v, cd)
-        coll.objects.link(ob)
-        a = math.radians(yaw)
-        # camera sits on the view axis: FRONT at -Y, LEFT at +X (character's left), BACK at +Y, RIGHT at -X
-        pos = Matrix.Rotation(a, 3, "Z") @ V((0.0, -CAM_DIST, CAM_Z))
-        ob.location = pos
-        tgt = V((0, 0, CAM_AIM_Z))
-        ob.rotation_euler = (tgt - pos).to_track_quat("-Z", "Y").to_euler()
-        first = first or ob
-    sc.camera = first
+    cd = bpy.data.cameras.new("CAM_Turnaround")
+    cd.lens = LENS
+    cd.sensor_fit = "HORIZONTAL"
+    cd.sensor_width = SENSOR_W
+    cd.shift_y = SHIFT_Y
+    cd.clip_start = 0.1
+    cd.clip_end = 12000.0
+    cd.dof.use_dof = True
+    cd.dof.focus_distance = CAM_D
+    cd.dof.aperture_fstop = FSTOP
+    ob = bpy.data.objects.new("CAM_Turnaround", cd)
+    coll.objects.link(ob)
+    ob.location = (0.0, -CAM_D, EYE)
+    ob.rotation_euler = (math.radians(90.0), 0.0, 0.0)
+    sc.camera = ob
+    return ob
 
 
-# --- environment -------------------------------------------------------------------------------------------
-def mat_dock(name="Dock_Concrete_Wet"):
-    """Wet, worn concrete quay: expansion joints, cracks, puddles that mirror the sky and lamps."""
-    m = new_mat(name)
-    nb = NB(m)
-    tc = nb.texcoord()
-    obj = tc.outputs["Object"]
-    br = nb.n("ShaderNodeTexBrick", (-900, 200))
-    br.offset = 0.0
-    br.inputs["Scale"].default_value = 0.25
-    br.inputs["Mortar Size"].default_value = 0.004
-    br.inputs["Brick Width"].default_value = 1.0
-    br.inputs["Row Height"].default_value = 1.0
-    br.inputs["Color1"].default_value = (0.040, 0.042, 0.046, 1)
-    br.inputs["Color2"].default_value = (0.032, 0.034, 0.038, 1)
-    br.inputs["Mortar"].default_value = (0.006, 0.006, 0.007, 1)
-    nb.link(obj, br.inputs["Vector"])
-    n = nb.noise(obj, 2.5, 10, 0.65)
-    col = nb.mix(nb.ramp(n.outputs["Fac"], [(0.35, 0.0), (0.7, 1.0)]), br.outputs["Color"], (0.065, 0.068, 0.072))
-    stain = nb.noise(obj, 0.6, 6, 0.6)
-    col = nb.mix(nb.math("MULTIPLY", nb.ramp(stain.outputs["Fac"], [(0.5, 0.0), (0.7, 1.0)]), 0.7), col,
-                 (0.020, 0.021, 0.024))
-    cr = nb.noise(obj, 4.0, 12, 0.75, distortion=0.6)
-    crack = nb.ramp(cr.outputs["Fac"], [(0.49, 0.0), (0.5, 1.0), (0.51, 0.0)])
-    col = nb.mix(nb.math("MULTIPLY", crack, 0.8), col, (0.008, 0.008, 0.009))
-    wet = nb.ramp(nb.noise(obj, 0.35, 5, 0.55).outputs["Fac"], [(0.44, 0.0), (0.54, 1.0)])  # mostly wet, dry islands
-    col = nb.mix(nb.math("MULTIPLY", wet, 0.6), col, (0.010, 0.011, 0.013))
-    ripple = nb.noise(obj, 3.0, 4, 0.6)
-    rough = nb.mixf(wet, 0.55, nb.math("ADD", 0.05, nb.math("MULTIPLY", ripple.outputs["Fac"], 0.10)))
-    grit = nb.noise(obj, 80.0, 6, 0.7)
-    h = nb.math("ADD", nb.math("MULTIPLY", grit.outputs["Fac"], 0.3),
-                nb.math("ADD", nb.math("MULTIPLY", br.outputs["Fac"], -0.6), nb.math("MULTIPLY", crack, -0.4)))
-    bmp = nb.n("ShaderNodeBump", (-200, -300))
-    nb.link(nb.math("MULTIPLY", nb.math("SUBTRACT", 1.0, wet), 0.6), bmp.inputs["Strength"])
-    bmp.inputs["Distance"].default_value = 0.01
-    nb.link(h, bmp.inputs["Height"])
-    p = nb.principled(Base_Color=col, Roughness=rough, Coat_Roughness=0.02, Normal=bmp.outputs["Normal"])
-    nb.link(wet, p.inputs["Coat Weight"])
-    nb.output(p.outputs[0])
-    return m
+def build_turnaround(sc):
+    """The character itself is the FRONT figure; LEFT, BACK and RIGHT are linked instances of it, turned so their
+    left side, back and right side face the camera."""
+    char = bpy.data.collections.get("NavySeal_Character")
+    root = bpy.data.objects.get("NavySeal_Root")
+    if char is None or root is None:
+        return
+    fx = FIGURES["Front"][0]
+    root.location = (fx, 0.0, 0.0)
+    char.instance_offset = (fx, 0.0, 0.0)
+    coll = collection("Turnaround_Views")
+    # the sheet shows the carbine slung on the back in the LEFT, BACK and RIGHT views and in the right hand in the
+    # FRONT view: the slung carbine is its own collection, excluded here and instanced by the three side/back views
+    slung = bpy.data.collections.get("Carbine_Slung")
+    if slung is not None:
+        slung.instance_offset = (fx, 0.0, 0.0)
+        lc = bpy.context.view_layer.layer_collection.children.get("Carbine_Slung")
+        if lc is not None:
+            lc.exclude = True
+    for v in ("Left", "Back", "Right"):
+        x, rot = FIGURES[v]
+        for src, tag in ((char, "View"), (slung, "Carbine_Slung")):
+            if src is None:
+                continue
+            e = bpy.data.objects.new("NavySeal_%s_%s" % (v, tag), None)
+            e.instance_type = "COLLECTION"
+            e.instance_collection = src
+            e.location = (x, 0.0, 0.0)
+            e.rotation_euler = (0.0, 0.0, math.radians(rot))
+            e.empty_display_size = 0.3
+            coll.objects.link(e)
 
 
-def mat_sea(name="Harbour_Water"):
-    m = new_mat(name)
-    nb = NB(m)
-    tc = nb.texcoord()
-    obj = tc.outputs["Object"]
-    w1 = nb.noise(nb.mapping(obj, (0.25, 0.7, 1.0)), 0.5, 6, 0.6)      # long swells
-    w2 = nb.noise(nb.mapping(obj, (1.0, 2.2, 1.0)), 1.6, 5, 0.6)       # chop
-    w3 = nb.noise(obj, 9.0, 3, 0.5)
-    h = nb.math("ADD", nb.math("ADD", w1.outputs["Fac"], nb.math("MULTIPLY", w2.outputs["Fac"], 0.5)),
-                nb.math("MULTIPLY", w3.outputs["Fac"], 0.15))
-    p = nb.principled(Base_Color=(0.004, 0.006, 0.009), Roughness=0.10, IOR=1.33,
-                      Normal=nb.bump(h, 1.0, 0.12))
-    nb.output(p.outputs[0])
-    return m
-
-
-def fog_wrap(mat, fog_col=(0.11, 0.13, 0.19), near=12.0, scale=240.0, max_fac=0.62, top=60.0):
-    """Aerial perspective: exponential distance haze toward a cool blue-grey, thinner with height."""
+# --- environment materials ---------------------------------------------------------------------------------
+def fog_wrap(mat, fog_col=(0.150, 0.190, 0.255), near=30.0, scale=600.0, max_fac=0.75, top=600.0, top_keep=0.7):
+    """Aerial perspective: exponential distance haze toward a cool blue-grey (about 50% at 500 m), thinner with
+    height."""
     nt = mat.node_tree
     out = [n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"][0]
     src = out.inputs["Surface"].links[0].from_socket
@@ -341,7 +294,7 @@ def fog_wrap(mat, fog_col=(0.11, 0.13, 0.19), near=12.0, scale=240.0, max_fac=0.
     hr.inputs["From Min"].default_value = 0.0
     hr.inputs["From Max"].default_value = top
     hr.inputs["To Min"].default_value = 1.0
-    hr.inputs["To Max"].default_value = 0.6
+    hr.inputs["To Max"].default_value = top_keep
     nt.links.new(sp.outputs[2], hr.inputs["Value"])
     fac = mth("MULTIPLY", mth("MULTIPLY", dist, hr.outputs[0]), max_fac)
     em = nt.nodes.new("ShaderNodeEmission")
@@ -355,21 +308,102 @@ def fog_wrap(mat, fog_col=(0.11, 0.13, 0.19), near=12.0, scale=240.0, max_fac=0.
     return mat
 
 
-def mat_hull(name, base=(0.045, 0.050, 0.056), rough=0.55, rust=0.2, metal=0.3):
-    """Painted steel: haze-grey paint, streaks and rust runs, darker boot-topping near the waterline."""
+def mat_sky():
+    m = new_mat("Sky_Backdrop_Dusk")
+    nb = NB(m)
+    tc = nb.texcoord()
+    L.image("sky_backdrop.png", "Non-Color")
+    t = nb.img("sky_backdrop.png", tc.outputs["UV"], "EXTEND")
+    pw = nb.n("ShaderNodeGamma", (-300, 0))
+    nb.link(t.outputs["Color"], pw.inputs["Color"])
+    pw.inputs["Gamma"].default_value = SKY_GAMMA
+    em = nb.n("ShaderNodeEmission", (0, 0))
+    nb.link(pw.outputs["Color"], em.inputs["Color"])
+    em.inputs["Strength"].default_value = SKY_GAIN
+    nb.output(em.outputs[0])
+    return m
+
+
+def mat_dock(name="Dock_Concrete_Wet"):
+    """Rain-soaked concrete quay: noise-mottled concrete with darker stains, a thin film of standing water (big
+    mirror puddles, damp areas, a few dry patches), broad ripple bands parallel to the quay that stretch the lamp
+    reflections into dashed vertical streaks, fine grit, scattered droplets, one expansion joint aimed at the
+    camera between the BACK figure's feet."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    st = nb.noise(nb.mapping(obj, (2.0, 2.0, 0.15)), 3.0, 6, 0.6)
-    col = nb.mix(nb.ramp(st.outputs["Fac"], [(0.4, 0.0), (0.7, 1.0)]), base, tuple(c * 0.55 for c in base))
-    rs = nb.noise(nb.mapping(obj, (3.0, 3.0, 0.3)), 6.0, 6, 0.7)
-    col = nb.mix(nb.math("MULTIPLY", nb.ramp(rs.outputs["Fac"], [(0.62, 0.0), (0.75, 1.0)]), rust), col,
-                 (0.06, 0.03, 0.018))
-    sep = nb.n("ShaderNodeSeparateXYZ", (-1000, -400))
-    nb.link(tc.outputs["Generated"], sep.inputs[0])
-    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal,
-                      Normal=nb.bump(nb.noise(obj, 25.0, 4, 0.5).outputs["Fac"], 0.1, 0.02))
+    n1 = nb.noise(obj, 0.8, 8, 0.62)
+    col = nb.mix(nb.ramp(n1.outputs["Fac"], [(0.35, 0.0), (0.7, 1.0)]), (0.019, 0.023, 0.031), (0.028, 0.033, 0.043))
+    stain = nb.ramp(nb.noise(obj, 0.35, 6, 0.6, distortion=0.8).outputs["Fac"], [(0.55, 0.0), (0.68, 1.0)])
+    col = nb.mix(nb.math("MULTIPLY", stain, 0.8), col, (0.010, 0.013, 0.018))
+    # expansion joint: the line through (0.57, 0.6) and (0.98, 10.4), aimed at the camera
+    sx = nb.n("ShaderNodeSeparateXYZ", (-900, -500))
+    nb.link(obj, sx.inputs[0])
+    a0, b0 = V((0.57, 0.6, 0.0)), V((0.98, 10.4, 0.0))
+    dv = (b0 - a0).normalized()
+    dist = nb.math("ABSOLUTE", nb.math("SUBTRACT", nb.math("MULTIPLY", nb.math("SUBTRACT", sx.outputs[0], a0.x), dv.y),
+                                       nb.math("MULTIPLY", nb.math("SUBTRACT", sx.outputs[1], a0.y), dv.x)))
+    joint = nb.math("MULTIPLY", nb.math("LESS_THAN", dist, 0.009),
+                    nb.math("MULTIPLY", nb.math("GREATER_THAN", sx.outputs[1], 0.3),
+                            nb.math("LESS_THAN", sx.outputs[1], 20.0)))
+    col = nb.mix(joint, col, (0.006, 0.007, 0.009))
+    # water film: puddles (most of the quay, more toward the far edge), damp, a few dry patches
+    wn = nb.noise(obj, 0.22, 5, 0.55)
+    far = nb.math("MULTIPLY", nb.math("MAXIMUM", nb.math("SUBTRACT", sx.outputs[1], 2.0), 0.0), 0.02)
+    puddle = nb.ramp(nb.math("ADD", wn.outputs["Fac"], far), [(0.40, 0.0), (0.47, 1.0)])
+    dry = nb.ramp(nb.noise(obj, 0.5, 4, 0.6).outputs["Fac"], [(0.66, 0.0), (0.72, 1.0)])
+    rough = nb.mixf(puddle, nb.mixf(dry, 0.36, 0.60), 0.09)
+    drop = nb.ramp(nb.noise(obj, 260.0, 2, 0.5).outputs["Fac"], [(0.72, 0.0), (0.76, 1.0)])
+    rough = nb.mixf(nb.math("MULTIPLY", drop, nb.math("SUBTRACT", 1.0, puddle)), rough, 0.03)
+    rough = nb.mixf(joint, rough, 0.6)
+    col = nb.mix(nb.math("MULTIPLY", puddle, 0.5), col, (0.012, 0.014, 0.019))
+    # ripple bands parallel to the quay (crests along X, ~1 m apart) + grit
+    wv = nb.n("ShaderNodeTexWave", (-900, -800), wave_type="BANDS", bands_direction="Y")
+    wv.inputs["Scale"].default_value = 0.30
+    wv.inputs["Distortion"].default_value = 6.0
+    wv.inputs["Detail"].default_value = 4.0
+    nb.link(obj, wv.inputs["Vector"])
+    grit = nb.noise(obj, 40.0, 4, 0.6)
+    band = nb.ramp(wv.outputs["Fac"], [(0.35, 0.0), (0.65, 1.0)])
+    rough = nb.mixf(nb.math("MULTIPLY", puddle, band), rough, 0.26)      # broken, dashed reflections
+    h = nb.math("ADD", wv.outputs["Fac"], nb.math("MULTIPLY", grit.outputs["Fac"], nb.mixf(puddle, 0.6, 0.05)))
+    h = nb.math("SUBTRACT", h, nb.math("MULTIPLY", joint, 0.8))
+    h = nb.math("ADD", h, nb.math("MULTIPLY", drop, 0.3))
+    p = nb.principled(Base_Color=col, Roughness=rough, Specular_IOR_Level=0.5, IOR=1.33,
+                      Normal=nb.bump(h, 0.2, 0.01))
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_sea(name="Harbour_Water"):
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    w1 = nb.noise(nb.mapping(obj, (0.08, 0.25, 1.0)), 0.6, 6, 0.6)     # long swells
+    w2 = nb.noise(nb.mapping(obj, (0.6, 1.4, 1.0)), 1.6, 5, 0.6)       # chop
+    w3 = nb.noise(obj, 6.0, 3, 0.5)
+    h = nb.math("ADD", nb.math("ADD", w1.outputs["Fac"], nb.math("MULTIPLY", w2.outputs["Fac"], 0.5)),
+                nb.math("MULTIPLY", w3.outputs["Fac"], 0.15))
+    p = nb.principled(Base_Color=(0.004, 0.011, 0.017), Roughness=0.08, IOR=1.33, Normal=nb.bump(h, 0.6, 0.15))
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_paint(name, base, rough=0.5, metal=0.2, streak=0.35, rust=0.08):
+    """Painted steel at a distance: base colour with vertical streaks and faint rust runs."""
+    m = new_mat(name)
+    nb = NB(m)
+    tc = nb.texcoord()
+    obj = tc.outputs["Object"]
+    st = nb.noise(nb.mapping(obj, (1.0, 1.0, 0.08)), 0.6, 6, 0.6)
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(st.outputs["Fac"], [(0.4, 0.0), (0.7, 1.0)]), streak), base,
+                 tuple(c * 0.55 for c in base))
+    rs = nb.noise(nb.mapping(obj, (1.0, 1.0, 0.2)), 1.5, 6, 0.7)
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(rs.outputs["Fac"], [(0.64, 0.0), (0.75, 1.0)]), rust), col,
+                 (0.05, 0.026, 0.016))
+    p = nb.principled(Base_Color=col, Roughness=rough, Metallic=metal)
     nb.output(p.outputs[0])
     return m
 
@@ -384,19 +418,22 @@ def mat_emit(name, col, strength):
     return m
 
 
-def mat_foam(name="Sea_Spray_Foam"):
-    """Breaking surf along the quay edge: white foam streaks with a noisy alpha."""
+def mat_foam(name="Surf_Foam_Spray"):
+    """Breaking surf and spray: frothy blue-white streaks with a noisy alpha, brighter crests."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    n = nb.noise(nb.mapping(obj, (0.6, 0.6, 2.0)), 3.0, 8, 0.7, distortion=0.6)
-    a = nb.ramp(n.outputs["Fac"], [(0.52, 0.0), (0.70, 1.0)])
+    n = nb.noise(nb.mapping(obj, (1.2, 1.2, 3.5)), 2.5, 10, 0.72, distortion=0.8)
     sep = nb.n("ShaderNodeSeparateXYZ", (-1000, -400))
     nb.link(tc.outputs["UV"], sep.inputs[0])
-    a = nb.math("MULTIPLY", a, nb.ramp(sep.outputs[1], [(0.0, 1.0), (1.0, 0.0)]))
-    p = nb.principled(Base_Color=(0.55, 0.60, 0.70), Roughness=0.5, Subsurface_Weight=0.3,
-                      Emission_Color=(0.35, 0.42, 0.55), Emission_Strength=0.25)
+    v = sep.outputs[1]                                       # 0 at the base .. 1 at the crest
+    a = nb.ramp(nb.math("SUBTRACT", n.outputs["Fac"], nb.math("MULTIPLY", v, 0.30)), [(0.22, 0.0), (0.38, 1.0)])
+    a = nb.math("MULTIPLY", a, nb.ramp(v, [(0.0, 1.0), (0.85, 0.8), (1.0, 0.0)]))
+    col = nb.mix(nb.ramp(nb.math("ADD", v, nb.math("MULTIPLY", n.outputs["Fac"], 0.6)), [(0.5, 0.0), (1.0, 1.0)]),
+                 (0.060, 0.105, 0.160), (0.63, 0.73, 0.79))
+    p = nb.principled(Base_Color=col, Roughness=0.55, Subsurface_Weight=0.3, Emission_Color=col,
+                      Emission_Strength=0.9)
     tr = nb.n("ShaderNodeBsdfTransparent", (200, -300))
     mx = nb.n("ShaderNodeMixShader", (450, 0))
     nb.link(a, mx.inputs[0])
@@ -406,235 +443,346 @@ def mat_foam(name="Sea_Spray_Foam"):
     return m
 
 
-def mat_mist(name, col=(0.16, 0.18, 0.24), dens=0.5):
+def mat_rock(name="Mountain_Rock_Hazed"):
+    """Steep fjord rock with vertical striations (seen through heavy haze)."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    w = nb.ramp(nb.noise(nb.mapping(obj, (0.03, 0.03, 0.25)), 2.0, 6, 0.6, distortion=0.5).outputs["Fac"],
-                [(0.35, 0.0), (0.70, 1.0)])
-    su = nb.n("ShaderNodeSeparateXYZ", (-900, -300))
-    nb.link(tc.outputs["UV"], su.inputs[0])
-    band = nb.ramp(su.outputs[1], [(0.0, 0.0), (0.2, 1.0), (1.0, 0.0)])
-    alpha = nb.math("MULTIPLY", nb.math("MULTIPLY", w, band), dens)
-    em = nb.n("ShaderNodeEmission", (200, -100))
-    em.inputs["Color"].default_value = (*col, 1)
-    tr = nb.n("ShaderNodeBsdfTransparent", (200, 100))
-    mx = nb.n("ShaderNodeMixShader", (400, 0))
-    nb.link(alpha, mx.inputs[0])
+    st = nb.noise(nb.mapping(obj, (0.02, 0.02, 0.0025)), 1.0, 8, 0.65)
+    n2 = nb.noise(obj, 0.01, 6, 0.6)
+    col = nb.mix(nb.ramp(st.outputs["Fac"], [(0.35, 0.0), (0.7, 1.0)]), (0.022, 0.026, 0.033), (0.055, 0.060, 0.070))
+    col = nb.mix(nb.math("MULTIPLY", nb.ramp(n2.outputs["Fac"], [(0.5, 0.0), (0.7, 1.0)]), 0.5), col,
+                 (0.012, 0.014, 0.018))
+    p = nb.principled(Base_Color=col, Roughness=0.9, Normal=nb.bump(st.outputs["Fac"], 0.8, 30.0))
+    nb.output(p.outputs[0])
+    return m
+
+
+def mat_rotor_disc(name="Rotor_Blur_Disc"):
+    """Semi-transparent motion-blur disc of the main rotor."""
+    m = new_mat(name)
+    nb = NB(m)
+    em = nb.n("ShaderNodeEmission", (0, -100))
+    em.inputs["Color"].default_value = (0.082, 0.084, 0.11, 1)
+    tr = nb.n("ShaderNodeBsdfTransparent", (0, 100))
+    mx = nb.n("ShaderNodeMixShader", (300, 0))
+    mx.inputs[0].default_value = 0.25
     nb.link(tr.outputs[0], mx.inputs[1])
     nb.link(em.outputs[0], mx.inputs[2])
     nb.output(mx.outputs[0])
     return m
 
 
-def at(gamma_deg, dist, z=0.0):
-    """Env-local position that shows up at angle gamma (deg, + to the right) of the turnaround strip."""
-    g = math.radians(gamma_deg)
-    return V((dist * math.sin(g), dist * math.cos(g), z))
+# --- environment geometry helpers --------------------------------------------------------------------------
+def lathe_axis(profile, a, axis_dir, up=(0, 0, 1), n=32, nt=48):
+    """Body of revolution: profile [(t, r)] along axis_dir from point a (t in metres)."""
+    ax = V(axis_dir).normalized()
+    side = ax.cross(V(up)).normalized()
+    upv = side.cross(ax).normalized()
+    t0, t1 = profile[0][0], profile[-1][0]
+
+    def f(u, v, i, j):
+        t = lerp(t0, t1, v)
+        r = interp_smooth(profile, t)[0]
+        return V(a) + ax * t + side * (r * math.cos(u)) + upv * (r * math.sin(u))
+    return grid(f, lin(0, TAU, n), lin(0, 1, nt), closed_u=True)
 
 
-WATER_Z = -1.40
-QUAY_R = 17.0
+def screen_box(x0, x1, y0, y1, d, depth):
+    """Box whose camera-facing face covers sheet rect (x0..x1, y0..y1) at distance d, `depth` metres deep."""
+    a, b = sheet_pt(x0, y1, d), sheet_pt(x1, y0, d)
+    return L.box(b.x - a.x, depth, b.z - a.z).translate(((a.x + b.x) / 2, a.y + depth / 2, (a.z + b.z) / 2))
 
 
-def hull_md(length, beam, depth, bow=0.30, stern=0.10, sheer=0.6, sub=False):
-    """Ship hull along local +Y (bow at +Y): lofted sections, flared bow, transom stern, keel at z=0."""
-    def fn(u, v, i, j):
-        t = v                                    # 0 stern .. 1 bow
-        y = lerp(-length / 2, length / 2, t)
-        w = beam / 2 * (1 - (max(0.0, t - (1 - bow)) / bow) ** 1.8) * (1 - 0.25 * (max(0.0, stern - t) / stern) ** 2)
-        if sub:
-            r = beam / 2 * math.sqrt(max(0.0, 1 - (max(0.0, t - 0.88) / 0.12) ** 2)) * \
-                math.sqrt(max(0.0, 1 - (max(0.0, 0.10 - t) / 0.10) ** 2) * 0.9 + 0.1)
-            return V((r * math.sin(u), y, depth / 2 + r * math.cos(u) * (depth / beam)))
-        a = u  # -pi/2 .. pi/2 around the hull section, 0 = keel
-        x = w * math.sin(a)
-        z = depth * (1 - math.cos(a) ** 1.5) + sheer * (t - 0.5) ** 2 * 2
-        return V((x, y, z))
+def screen_poly(outline, d, depth):
+    """Prism from a sheet-space outline [(x, y)] at distance d, extruded `depth` metres away from the camera."""
+    md = MD()
+    pts = [sheet_pt(x, y, d) for x, y in outline]
+    n = len(pts)
+    md.v.extend(pts + [p + V((0, depth, 0)) for p in pts])
+    cf = sum(pts, V()) / n
+    md.v.extend([cf, cf + V((0, depth, 0))])
+    for k in range(n):
+        k2 = (k + 1) % n
+        md.f.append((k, k2, n + k2, n + k))
+        md.uv.append([(0, 0), (1, 0), (1, 1), (0, 1)])
+        md.f.append((2 * n, k2, k))
+        md.uv.append([(0.5, 0.5), (0, 0), (1, 0)])
+        md.f.append((2 * n + 1, n + k, n + k2))
+        md.uv.append([(0.5, 0.5), (0, 0), (1, 0)])
+    md.mi = [0] * len(md.f)
+    return md
 
-    if sub:
-        return grid(fn, lin(0, TAU, 32), lin(0, 1, 40), closed_u=True)
-    return grid(fn, lin(-math.pi / 2, math.pi / 2, 16), lin(0, 1, 30))
+
+def screen_post(x, y0, y1, d, w_px):
+    """Thin vertical cylinder covering sheet column x, rows y0..y1, at distance d."""
+    a, b = sheet_pt(x, y1, d), sheet_pt(x, y0, d)
+    r = w_px / 2 / PX_M * d / CAM_D
+    return L.tube([a, b], r, 8)
 
 
+# --- environment -------------------------------------------------------------------------------------------
 def build_environment(sc):
     coll = collection("Environment_Harbour")
     root = env_root()
 
-    def put(name, md, mat, smooth_=True):
-        return to_obj(name, md, mat, coll, smooth=smooth_, parent=root)
+    def put(name, md, mat, smooth_=True, shadow=True, diffuse=True):
+        ob = to_obj(name, md, mat, coll, smooth=smooth_, parent=root)
+        ob.visible_shadow = shadow
+        ob.visible_diffuse = diffuse
+        return ob
 
-    dock = mat_dock()
-    sea = fog_wrap(mat_sea())
-    hull_grey = fog_wrap(mat_hull("Warship_Hull_Grey", base=(0.060, 0.066, 0.074)))
-    deck_grey = fog_wrap(mat_hull("Warship_Superstructure", base=(0.075, 0.082, 0.090), rust=0.1))
-    dark_boat = fog_wrap(mat_hull("Patrol_Boat_Dark", base=(0.020, 0.022, 0.026), rough=0.5))
-    sub_black = fog_wrap(mat_hull("Submarine_Anechoic", base=(0.010, 0.011, 0.012), rough=0.35, rust=0.0, metal=0.1))
-    heli_grey = fog_wrap(mat_hull("Helicopter_Grey", base=(0.30, 0.31, 0.32), rough=0.40, rust=0.0, metal=0.3),
-                         max_fac=0.35)
-    rock = fog_wrap(L.mat_simple("Mountain_Rock", (0.050, 0.055, 0.065), rough=0.9, var_col=(0.09, 0.10, 0.11),
-                                 var_scale=0.02, bump_scale=0.05, bump_str=0.6), scale=900.0, max_fac=0.92, top=400.0)
-    lamp_mat = mat_emit("Floodlight_Glow", (0.85, 0.90, 1.0), 25.0)
-    curb = L.mat_simple("Quay_Curb_Concrete", (0.05, 0.052, 0.056), rough=0.6, var_col=(0.03, 0.03, 0.035),
-                        bump_scale=6.0, bump_str=0.5)
+    # ------------------------------------------------------------------ sky card (8 km)
+    x0, y0, x1, y1 = SKY_WINDOW
+    card = MD()
+    card.v.extend([sheet_pt(x0, y1, SKY_D), sheet_pt(x1, y1, SKY_D), sheet_pt(x1, y0, SKY_D), sheet_pt(x0, y0, SKY_D)])
+    card.f.append((0, 1, 2, 3))
+    card.uv.append([(0, 0), (1, 0), (1, 1), (0, 1)])
+    card.mi = [0]
+    sky = put("Sky_Backdrop", card, mat_sky(), smooth_=False, shadow=False, diffuse=False)
+    sky.visible_transmission = False
+    sky.visible_volume_scatter = False
 
-    # ------------------------------------------------------------------ quay apron, edge curb, sea, surf
-    put("Dock_Quay", grid(lambda u, v, i, j: (v * math.cos(u), v * math.sin(u), 0.0), lin(0, TAU, 160),
-                          lin(0.0, QUAY_R, 40), closed_u=True), dock)
-    put("Quay_Edge_Wall", grid(lambda u, v, i, j: ((QUAY_R + 0.05 * v) * math.cos(u), (QUAY_R + 0.05 * v) * math.sin(u),
-                                                   lerp(0.12, WATER_Z - 0.5, v)), lin(0, TAU, 160), lin(0, 1, 3),
-                               closed_u=True), curb)
-    put("Harbour_Sea", grid(lambda u, v, i, j: (v * math.cos(u), v * math.sin(u), WATER_Z), lin(0, TAU, 128),
-                            lin(QUAY_R - 0.2, 4000.0, 36), closed_u=True), sea)
-    spray = MD()
-    for (g0, g1, amp) in ((-16.0, -5.0, 1.0), (6.0, 15.0, 0.7)):
-        def sf(u, v, i, j, g0=g0, g1=g1, amp=amp):
-            g = lerp(g0, g1, u)
-            r = QUAY_R + 0.4 + 2.5 * v
-            crest = (0.5 + 0.5 * math.sin(u * 23.0 + 1.3) * math.sin(u * 9.0)) * amp
-            p = at(g, r, 0.0)
-            return V((p.x, p.y, WATER_Z + 0.2 + (1.9 * crest + 0.3) * (1 - v) ** 1.5))
-        spray.add(grid(sf, lin(0, 1, 120), lin(0, 1, 5)))
-    foam = put("Surf_Spray", spray, mat_foam())
-    foam.visible_shadow = False
+    # ------------------------------------------------------------------ wet quay, quay wall, sea
+    xs = sorted(set([round(x, 3) for x in lin(-60.0, 60.0, 241)] + [p[0] for p in QUAY_EDGE[1:-1]]))
+    dock = grid(lambda u, v, i, j: V((u, lerp(-12.0, quay_y(u), v), 0.0)), xs, lin(0, 1, 60))
+    put("Dock_Quay", dock, mat_dock(), smooth_=False)
+    wall = grid(lambda u, v, i, j: V((u, quay_y(u) + 0.04 * v, lerp(0.0, WATER_Z - 1.5, v))), xs, lin(0, 1, 3),
+                flip=True)
+    put("Quay_Wall", wall, L.mat_simple("Quay_Wall_Concrete", (0.020, 0.022, 0.026), rough=0.4, bump_scale=3.0,
+                                        bump_str=0.5), smooth_=False)
+    sea = grid(lambda u, v, i, j: V((u, lerp(18.0, SKY_D - 200.0, v ** 2.2), WATER_Z)), lin(-3000, 3000, 41),
+               lin(0, 1, 60))
+    put("Harbour_Sea", sea, fog_wrap(mat_sea(), scale=900.0, max_fac=0.55), smooth_=False)
 
-    # ------------------------------------------------------------------ submarine (far left, bow toward the camera)
+    # ------------------------------------------------------------------ surf and spray along the quay edge
+    surf = MD()
+    for (xa, xb, hmin, hmax, seed) in ((-9.0, -0.85, 0.15, 0.27, 1.3), (-0.85, 2.4, 0.02, 0.06, 2.1),
+                                       (2.4, 14.0, 0.28, 0.42, 3.7)):
+        def sf(u, v, i, j, xa=xa, xb=xb, hmin=hmin, hmax=hmax, seed=seed):
+            x = lerp(xa, xb, u)
+            crest = hmin + (hmax - hmin) * (0.5 + 0.5 * math.sin(x * 2.3 + seed) * math.sin(x * 0.7 + 2 * seed))
+            if xa < -1.0:                                     # spray plumes at sheet x ~15 and ~150
+                crest += sum(0.12 * math.exp(-((x - px) / 0.25) ** 2) for px in (-4.45, -3.36))
+            y = quay_y(x) + 0.15 + 1.6 * v
+            z = lerp(-0.4, crest, (1 - v) ** 0.4) + 0.02 * L.fbm(V((x * 3, v * 4, seed)))
+            return V((x, y, z))
+        surf.add(grid(sf, lin(0, 1, int((xb - xa) * 14) + 2), lin(0, 1, 6), uv_fn=lambda u, v, i, j: (u, 1 - v)))
+    sp = put("Surf_Spray", surf, mat_foam(), shadow=False)
+    sp.visible_diffuse = False
+
+    # ------------------------------------------------------------------ quay lamps (bollard lights on the edge)
+    lamps, warm = MD(), MD()
+    for name, (x, y, z), r, power, col in (
+            ("L1", (-4.39, 20.9, 0.17), 0.032, 20, (0.80, 0.87, 0.91)),
+            ("L2", (-4.00, 21.0, 0.19), 0.040, 25, (0.80, 0.87, 0.91)),
+            ("L3", (-3.30, 21.2, 0.15), 0.030, 15, (0.80, 0.87, 0.91)),
+            ("L4", (-2.59, 21.6, 0.14), 0.024, 12, (0.80, 0.87, 0.91)),
+            ("L6", (0.61, 28.6, 0.13), 0.035, 18, (0.92, 0.88, 0.82)),
+            ("L7", (1.91, 36.4, 0.09), 0.035, 18, (0.92, 0.88, 0.82)),
+            ("L8", (5.88, 52.6, 0.39), 0.090, 60, (0.80, 0.87, 0.91)),
+            ("L9", (7.96, 54.9, 0.55), 0.160, 120, (0.92, 0.88, 0.82))):
+        lamps.add(L.uv_sphere(r, 16, 10, rz=r * (1.4 if name == "L2" else 1.0)).translate((x, y, z)))
+        ld = bpy.data.lights.new("Quay_Lamp_" + name, "POINT")
+        ld.energy = power
+        ld.color = col
+        ld.shadow_soft_size = r
+        lo = bpy.data.objects.new(ld.name, ld)
+        coll.objects.link(lo)
+        lo.location = (x, y - r * 1.5, z)
+        lo.parent = root
+    for (sx, sy, d, r) in ((648, 530, 34.0, 0.02), (720, 515, 40.0, 0.02)):
+        warm.add(L.uv_sphere(r, 10, 6).translate(sheet_pt(sx, sy, d)))
+    put("Quay_Lamp_Glow", lamps, mat_emit("Quay_Lamp_Cool_White", (0.85, 0.92, 0.96), 3.5), shadow=False)
+    put("Quay_Lamp_Warm_Dots", warm, mat_emit("Quay_Lamp_Warm", (0.92, 0.80, 0.62), 4.0), shadow=False)
+
+    # ------------------------------------------------------------------ materials of the vessels (hazed)
+    sub_black = fog_wrap(mat_paint("Submarine_Anechoic_Black", (0.002, 0.004, 0.006), rough=0.30, metal=0.1,
+                                   streak=0.2, rust=0.0), max_fac=0.10)
+    boat_dark = fog_wrap(mat_paint("Patrol_Boat_Hull", (0.010, 0.012, 0.015), rough=0.5), max_fac=0.22)
+    boat_house = fog_wrap(mat_paint("Patrol_Boat_Wheelhouse", (0.030, 0.035, 0.040), rough=0.5), max_fac=0.22)
+    ship_hull = fog_wrap(mat_paint("Warship_Hull_Haze_Grey", (0.008, 0.011, 0.014), rough=0.5), max_fac=0.14)
+    ship_super = fog_wrap(mat_paint("Warship_Superstructure", (0.060, 0.075, 0.088), rough=0.5, streak=0.25),
+                          max_fac=0.18)
+    ship_dark = fog_wrap(mat_paint("Warship_Mast_Dark", (0.010, 0.012, 0.018), rough=0.5, streak=0.1), max_fac=0.18)
+    crane_mat = fog_wrap(mat_paint("Crane_Breakwater_Dark", (0.008, 0.011, 0.016), rough=0.6, streak=0.1),
+                         max_fac=0.20)
+    heli_mat = fog_wrap(mat_paint("Helicopter_Navy_Grey", (0.11, 0.13, 0.16), rough=0.36, metal=0.25,
+                                  streak=0.15, rust=0.0), max_fac=0.25)
+    windows = mat_emit("Ship_Window_Amber", (0.53, 0.25, 0.11), 2.0)
+
+    # ------------------------------------------------------------------ submarine (left), nearly bow-on
+    # fitted to the sheet: bow-dome edge x 167, hull top y 428, sail x 82-122 to y 370, stern fins at x 25-60
+    a = math.radians(12.0)
+    back = V((-math.sin(a), math.cos(a), 0.0))         # from the bow toward the stern
+    bow_c = V((-24.6, 216.7, 1.3))
+    R = 2.9
+    hull_prof = [(-R, 0.0), (-R * 0.85, R * 0.53), (-R * 0.5, R * 0.87), (0.0, R), (40.0, R), (50.0, R * 0.82),
+                 (56.0, R * 0.5), (60.0, 0.3)]
     sub = MD()
-    hull = hull_md(70.0, 8.6, 8.6, sub=True)
-    sail = MD()
+    sub.add(lathe_axis(hull_prof, bow_c, back))
+    s_c = bow_c + back * 12.0 + V((0, 0, R - 0.3))
+    side = back.cross(V((0, 0, 1))).normalized()
+    heading = math.atan2(back.y, back.x)
 
     def sl(u, v, i, j):
         ca, sa = math.cos(u), math.sin(u)
-        w = 1.0 * (1 - 0.35 * v)
-        ln = 4.5 * (1 - 0.2 * v)
-        x = w * math.copysign(abs(sa) ** 0.5, sa)
-        y = ln * math.copysign(abs(ca) ** 0.8, ca) - (1.2 if ca < 0 else 0) * abs(ca)
-        return V((x, y, 8.0 + 4.2 * v))
-    sail.add(grid(sl, lin(0, TAU, 28), lin(0, 1, 6), closed_u=True, pole_v1=True))
-    for k, (dy, h) in enumerate(((1.6, 4.0), (0.4, 5.5), (-0.6, 3.0), (-1.6, 4.5))):
-        sail.add(L.tube([V((0, dy, 11.8)), V((0, dy, 11.8 + h * 0.45))], 0.18 - 0.02 * k, 8))
-    sail.add(L.box(5.5, 0.6, 0.15).translate((0, 2.0, 11.0)))  # sail planes
-    sub.add(hull)
-    sub.add(sail)
-    m = Matrix.Translation(at(-13.5, 85.0, WATER_Z - 4.2)) @ Matrix.Rotation(math.radians(-(180 - 13.5 - 38)), 4, "Z")
-    put("Submarine", sub.transform(m), sub_black)
+        ln = 3.0 * (1 - 0.10 * v)
+        w = 1.05 * (1 - 0.12 * v)
+        t = ln * math.copysign(abs(ca) ** 0.7, ca) * (1.0 if ca > 0 else 1.2)
+        return s_c + back * t + side * (w * math.copysign(abs(sa) ** 0.6, sa)) + V((0, 0, 3.8 * v))
+    sub.add(grid(sl, lin(0, TAU, 32), lin(0, 1, 6), closed_u=True, pole_v1=True))
+    for (dt, h, rr) in ((-1.4, 1.2, 0.16), (0.2, 1.8, 0.14), (1.6, 0.9, 0.2)):     # periscopes and masts
+        p0 = s_c + back * dt * 0.7 + V((0, 0, 3.75))
+        sub.add(L.tube([p0, p0 + V((0, 0, h))], rr, 8))
+    sub.add(L.box(3.0, 0.8, 0.12).transform(Matrix.Translation(s_c + back * -1.2 + V((0, 0, 2.6))) @
+                                            Matrix.Rotation(heading + math.pi / 2, 4, "Z")))   # sail planes
+    st = bow_c + back * 52.0
+    sub.add(L.box(0.5, 4.5, 4.0).transform(Matrix.Translation(st + V((0, 0, R * 0.6 + 1.6))) @
+                                           Matrix.Rotation(heading - math.pi / 2, 4, "Z")))     # upper rudder
+    sub.add(L.box(13.0, 3.2, 0.35).transform(Matrix.Translation(st) @
+                                             Matrix.Rotation(heading + math.pi / 2, 4, "Z")))   # stern planes
+    put("Submarine", sub, sub_black)
+    glint = MD()
+    glint.add(L.uv_sphere(0.18, 10, 6).translate(bow_c + V((1.9, -1.6, 1.5))))
+    put("Submarine_Bow_Glint", glint, mat_emit("Sub_Bow_Light", (0.85, 0.78, 0.74), 18.0), shadow=False)
 
-    # ------------------------------------------------------------------ patrol boat (behind the FRONT/LEFT seam)
+    # ------------------------------------------------------------------ patrol boat (between FRONT and LEFT), bow-on
     pb = MD()
-    pb.add(hull_md(26.0, 6.0, 3.2, bow=0.35, sheer=0.8))
-    for (w, l, h, y0, z0) in ((4.8, 8.0, 2.6, -1.0, 3.2), (3.6, 5.0, 2.2, -1.5, 5.8), (2.4, 3.0, 1.6, -1.8, 8.0)):
-        pb.add(L.box(w, l, h).translate((0, y0, z0 + h / 2)))
-    pb.add(L.tube([V((0, -2.0, 9.6)), V((0, -2.2, 16.0))], 0.16, 8))
-    for z in (12.0, 14.0):
-        pb.add(L.box(2.6, 0.12, 0.12).translate((0, -2.1, z)))
-    pb.add(L.box(1.2, 1.2, 0.8).translate((0, 6.5, 4.0)))      # bow gun mount
-    pb.add(L.tube([V((0, 6.5, 4.3)), V((0, 9.0, 4.6))], 0.1, 6))
-    m = Matrix.Translation(at(-3.4, 125.0, WATER_Z - 1.5)) @ Matrix.Rotation(math.radians(180 - 3.4 + 12), 4, "Z")
-    put("Patrol_Boat", pb.transform(m), dark_boat, smooth_=False)
+    pbc = V((-6.5, 187.0, 0.0))
+    yaw = math.radians(15.0)
+    fwd = V((math.sin(yaw), -math.cos(yaw), 0.0))      # bow direction: toward the camera, slightly right
+    sd = fwd.cross(V((0, 0, 1))).normalized()
+    for sgn in (1, -1):
+        pb.add(grid(lambda u, v, i, j, sgn=sgn: pbc + fwd * (22.0 * (v - 0.5)) +
+                    sd * (sgn * 2.25 * (1 - max(0.0, (v - 0.62) / 0.38) ** 1.6) * math.cos(u) ** 0.7) +
+                    V((0, 0, lerp(-1.6, 1.82 + 0.6 * max(0.0, v - 0.7), math.sin(u)))),
+                    lin(0.0, math.pi / 2, 6), lin(0, 1, 16), flip=(sgn < 0)))
+    whc = pbc + fwd * 1.0
+    for (w_, l_, z0, z1) in ((4.0, 6.0, 1.82, 3.0), (3.6, 4.8, 3.0, 4.62)):
+        pb.add(L.box(w_, l_, z1 - z0).transform(Matrix.Translation(whc + V((0, 0, (z0 + z1) / 2))) @
+                                                Matrix.Rotation(yaw, 4, "Z")))
+    pb.add(L.tube([whc + V((0, 0, 4.62)), whc + V((0, 0, 6.72))], 0.12, 8))
+    pb.add(L.box(1.6, 0.1, 0.1).transform(Matrix.Translation(whc + V((0, 0, 5.23))) @ Matrix.Rotation(yaw, 4, "Z")))
+    for xpost in (-7.88, -6.06):
+        pb.add(L.tube([V((xpost, 186.0, 1.8)), V((xpost, 186.0, 5.1))], 0.08, 6))
+    pb.add(L.box(1.4, 6.0, 3.0).translate((-4.05, 189.0, 0.0)))          # second small craft's dark bow
+    put("Patrol_Boat", pb, boat_dark, smooth_=False)
+    pw = MD()
+    for k in range(5):
+        pw.add(L.box(0.5, 0.05, 0.5).transform(Matrix.Translation(whc + fwd * 2.42 + sd * (-1.5 + 0.75 * k) +
+                                                                  V((0, 0, 3.35))) @ Matrix.Rotation(yaw, 4, "Z")))
+    put("Patrol_Boat_Windows", pw, boat_house, smooth_=False)
+    bl = MD()
+    bl.add(L.uv_sphere(0.25, 12, 8).translate((-6.15, 186.7, -0.88)))
+    put("Patrol_Boat_Bow_Light", bl, mat_emit("Bow_Light_Cool", (0.90, 0.96, 0.97), 8.0), shadow=False)
+    ld = bpy.data.lights.new("Patrol_Boat_Bow_Lamp", "POINT")
+    ld.energy = 600.0
+    ld.color = (0.85, 0.92, 0.96)
+    lo = bpy.data.objects.new(ld.name, ld)
+    coll.objects.link(lo)
+    lo.location = (-6.15, 185.5, -0.6)
+    lo.parent = root
 
-    # ------------------------------------------------------------------ warship (behind BACK/RIGHT), mast/crane
-    ws = MD()
-    ws.add(hull_md(120.0, 15.0, 7.5, bow=0.28, sheer=1.2))
-    for (w, l, h, y0, z0) in ((12.0, 30.0, 3.0, -8.0, 7.5), (10.0, 18.0, 2.6, -6.0, 10.5), (7.0, 9.0, 2.4, -4.0, 13.1),
-                              (11.0, 14.0, 2.6, 22.0, 7.5), (6.0, 6.0, 2.0, -30.0, 7.5)):
-        ws.add(L.box(w, l, h).translate((0, y0, z0 + h / 2)))
-    ws.add(L.tube([V((0, -4.0, 15.5)), V((0, -4.0, 24.0))], 0.4, 8, scale=lambda t: 1.0 - 0.6 * t))
-    for z in (18.5, 21.0, 23.0):
-        ws.add(L.box(6.0 - (z - 18.5) * 0.7, 0.25, 0.25).translate((0, -4.0, z)))
-    ws.add(L.box(3.0, 4.0, 3.0).translate((0, 8.0, 11.0)))       # funnel
-    ws.add(L.box(2.0, 2.0, 1.4).translate((0, 38.0, 10.0)))      # gun turret
-    ws.add(L.tube([V((0, 38.5, 10.3)), V((0, 44.0, 10.6))], 0.15, 6))
-    for k in range(10):  # railings / rigging verticals along the deck
-        ws.add(L.tube([V((6.8, -40 + k * 9.0, 9.0)), V((6.8, -40 + k * 9.0, 10.2))], 0.05, 4))
-    m = Matrix.Translation(at(9.5, 170.0, WATER_Z - 3.0)) @ Matrix.Rotation(math.radians(-72), 4, "Z")
-    put("Warship", ws.transform(m.copy()), hull_grey, smooth_=False)
-    # deck and window lights on the warship and the patrol boat
-    dots = MD()
-    for (x, y, z) in ((6.2, -14.0, 9.6), (6.2, -6.0, 9.6), (6.2, 2.0, 9.6), (5.1, -6.0, 12.0), (4.0, -4.0, 14.5),
-                      (0.0, -4.0, 24.2), (6.2, 20.0, 9.8), (6.2, 27.0, 9.8), (-6.2, -10.0, 9.6), (5.0, 12.0, 10.4)):
-        dots.add(L.uv_sphere(0.22, 8, 5).translate(m @ V((x, y, z))))
-    mp = Matrix.Translation(at(-3.4, 125.0, WATER_Z - 1.5)) @ Matrix.Rotation(math.radians(180 - 3.4 + 12), 4, "Z")
-    for (x, y, z) in ((0.0, -1.0, 6.4), (1.5, -1.0, 6.4), (-1.5, -1.0, 6.4), (0.0, -2.2, 16.0), (2.6, 3.0, 4.0)):
-        dots.add(L.uv_sphere(0.18, 8, 5).translate(mp @ V((x, y, z))))
-    put("Ship_Lights", dots, mat_emit("Ship_Light_Glow", (1.0, 0.92, 0.80), 30.0))
-    # tall lattice mast / crane in front of the warship, under the helicopter
-    crane = MD()
-    base = at(3.6, 130.0, 0.0)
-    crane.add(L.tube([base + V((0, 0, WATER_Z)), base + V((0, 0, 21.0))], 0.45, 10, scale=lambda t: 1.0 - 0.35 * t))
-    crane.add(L.box(2.0, 2.0, 1.0).translate(base + V((0, 0, 21.5))))
-    for z in (6.0, 11.0, 16.0):
-        crane.add(L.box(1.6, 1.6, 0.4).translate(base + V((0, 0, z))))
-    put("Harbour_Mast", crane, deck_grey, smooth_=False)
+    # ------------------------------------------------------------------ crane, dark block and breakwater (middle)
+    cr = MD()
+    cr.add(L.box(7.4, 0.3, 0.3).translate((9.7, 587.0, 9.2)))
+    cr.add(L.tube([V((11.2, 587.0, WATER_Z)), V((11.2, 587.0, 9.2))], 0.25, 8))
+    cr.add(L.box(3.1, 4.0, 4.9).translate((11.05, 590.0, 0.9)))
+    cr.add(L.box(42.0, 6.0, 1.2).translate((19.3, 600.0, WATER_Z + 0.5)))
+    for k in range(8):
+        cr.add(L.tube([V((2.0 + k * 5.0, 597.0, WATER_Z + 1.0)), V((2.0 + k * 5.0, 597.0, WATER_Z + 2.4))], 0.15, 6))
+    for (bx_, bw, bh_) in ((24.0, 6.0, 2.2), (33.0, 4.0, 1.6)):
+        cr.add(L.box(bw, 4.0, bh_).translate((bx_, 603.0, WATER_Z + 1.0 + bh_ / 2)))
+    put("Crane_Breakwater", cr, crane_mat, smooth_=False)
 
-    # ------------------------------------------------------------------ helicopter (hovering above the BACK panel)
+    # ------------------------------------------------------------------ warship (BACK / RIGHT), mast, far-right ship
+    D = 650.0
+    deck = [(712, 474), (720, 468), (760, 452), (830, 432), (900, 412), (970, 398), (1050, 392), (1144, 388),
+            (1260, 386)]
+    put("Warship_Hull", screen_poly(deck + [(1260, 516), (735, 516)], D, 18.0), ship_hull, smooth_=False)
+    sup = MD()
+    for (xa, xb, ya, yb) in ((830, 1050, 375, 402), (845, 1010, 352, 376), (870, 962, 330, 353), (905, 945, 318, 331),
+                             (1000, 1092, 345, 393), (790, 830, 410, 436)):
+        sup.add(screen_box(xa, xb, ya, yb, D - 4.0, 10.0))
+    put("Warship_Superstructure", sup, ship_super, smooth_=False)
+    dk = MD()
+    dk.add(screen_post(899, 140, 330, D - 2.0, 12.5))
+    dk.add(screen_box(884, 914, 148, 154, D - 2.0, 3.0))           # platform
+    dk.add(screen_box(890, 908, 183, 187, D - 2.0, 2.0))           # bracket
+    for xk in (748, 761):
+        dk.add(screen_post(xk, 407, 466, D - 30.0, 2.5))
+    dk.add(screen_box(746, 763, 427, 430, D - 30.0, 1.0))
+    for xr in range(724, 1144, 7):                                  # deck railing posts
+        yr = [y for (x, y) in deck if x <= xr][-1]
+        dk.add(screen_post(xr, yr - 5, yr, D - 6.0, 0.8))
+    put("Warship_Mast_Kingposts", dk, ship_dark, smooth_=False)
+    far = MD()
+    far.add(screen_box(1085, 1300, 400, 512, 620.0, 16.0))
+    far.add(screen_box(1085, 1300, 330, 400, 624.0, 10.0))
+    far.add(screen_post(1107, 318, 332, 622.0, 3.0))
+    put("Far_Ship", far, ship_hull, smooth_=False)
+    far_lit = MD()
+    far_lit.add(screen_box(1088, 1300, 334, 398, 622.0, 6.0))
+    put("Far_Ship_Superstructure", far_lit, ship_super, smooth_=False)
+    win = MD()
+    for (wx, wy, d_) in ((867, 336, D - 9.0), (872, 374, D - 9.0), (880, 376, D - 9.0), (1104, 368, 619.0),
+                         (930, 366, D - 9.0), (960, 366, D - 9.0), (985, 388, D - 9.0)):
+        win.add(L.uv_sphere(0.6, 8, 5).translate(sheet_pt(wx, wy, d_)))
+    put("Ship_Windows", win, windows, shadow=False)
+
+    # ------------------------------------------------------------------ helicopter hovering top right (nose-up flare)
+    Dh = 300.0
+    hm = Matrix.Translation(sheet_pt(925, 88, Dh)) @ Matrix.Rotation(math.radians(-62), 4, "Z") @ \
+        Matrix.Rotation(math.radians(-18), 4, "Y") @ Matrix.Rotation(math.radians(12), 4, "X")
     heli = MD()
 
     def fus(u, v, i, j):
         t = v
-        y = lerp(-6.0, 7.0, t)
-        r = interp_smooth([(0.0, 0.15), (0.15, 0.9), (0.45, 1.25), (0.75, 1.15), (0.92, 0.8), (1.0, 0.1)], t)[0]
-        rz = r * 1.25
-        return V((r * math.sin(u), y, rz * math.cos(u) - (0.3 * (1 - t) if t < 0.3 else 0)))
-
-    heli.add(grid(fus, lin(0, TAU, 24), lin(0, 1, 20), closed_u=True))
-    heli.add(L.tube([V((0, -5.8, 0.6)), V((0, -15.5, 1.6))], 0.45, 10, scale=lambda t: 1.0 - 0.55 * t))
-    heli.add(L.box(0.25, 2.2, 3.2).translate((0, -15.3, 2.8)))               # tail fin
-    heli.add(L.box(0.06, 0.2, 3.4).translate((0.35, -15.6, 2.8)))            # tail rotor blur
-    heli.add(L.box(1.6, 3.0, 0.9).translate((0, 1.0, 1.7)))                  # engine housing
-    heli.add(L.tube([V((0, 1.0, 2.1)), V((0, 1.0, 2.9))], 0.25, 8))        # rotor mast
-    for s in (-1, 1):
-        heli.add(L.tube([V((s * 1.0, 3.0, -1.4)), V((s * 1.5, 3.0, -2.1))], 0.08, 6))  # gear struts
-        heli.add(L.uv_sphere(0.35, 10, 6).translate((s * 1.5, 3.0, -2.3)))
-        heli.add(L.box(0.6, 1.6, 0.6).translate((s * 1.45, 0.5, -0.6)))      # sponsons
-    rotor = MD()
-    rotor.add(grid(lambda u, v, i, j: (v * 8.2 * math.cos(u), v * 8.2 * math.sin(u), 2.95 + 0.25 * v),
-                   lin(0, TAU, 48), lin(0.05, 1, 4), closed_u=True))
+        x = lerp(-11.0, 5.2, t)
+        r = interp_smooth([(0.0, 0.25), (0.40, 0.42), (0.55, 1.15), (0.70, 1.35), (0.86, 1.25), (0.96, 0.8),
+                           (1.0, 0.1)], t)[0]
+        zc = interp_smooth([(0.0, 0.6), (0.5, 0.5), (0.7, 0.0), (1.0, -0.2)], t)[0]
+        return V((x, r * 0.95 * math.sin(u), zc + r * 1.25 * math.cos(u)))
+    heli.add(grid(fus, lin(0, TAU, 24), lin(0, 1, 28), closed_u=True))
+    heli.add(L.box(1.6, 0.3, 2.6).translate((-10.6, 0.0, 1.6)))                  # fin
+    heli.add(L.box(2.8, 1.4, 0.9).translate((0.2, 0.0, 1.85)))                   # engine housing
+    heli.add(L.tube([V((0.3, 0.0, 2.2)), V((0.3, 0.0, 2.9))], 0.22, 8))          # rotor mast
+    for s in (1, -1):
+        heli.add(L.tube([V((1.5, s * 0.9, -1.3)), V((1.6, s * 1.2, -2.1))], 0.08, 6))
+        heli.add(L.uv_sphere(0.32, 10, 6).translate((1.6, s * 1.2, -2.2)))
+        heli.add(L.box(2.2, 0.5, 0.6).translate((-0.8, s * 1.3, -0.7)))
     blades = MD()
     for k in range(4):
-        a = TAU * k / 4 + 0.4
-        blades.add(L.box(8.0, 0.5, 0.08).transform(Matrix.Translation((4.0 * math.cos(a), 4.0 * math.sin(a), 3.05))
-                                                   @ Matrix.Rotation(a, 4, "Z")))
-    hm = Matrix.Translation(at(2.9, 205.0, 41.0)) @ Matrix.Rotation(math.radians(-38), 4, "Z") @ \
-        Matrix.Rotation(math.radians(8), 4, "X") @ Matrix.Rotation(math.radians(-6), 4, "Y")
-    put("Helicopter", heli.transform(hm), heli_grey)
-    put("Helicopter_Blades", blades.transform(hm.copy()), heli_grey, smooth_=False)
-    rd = put("Helicopter_Rotor_Blur", rotor.transform(hm.copy()), mat_mist("Rotor_Blur", (0.10, 0.11, 0.13), 0.35))
-    rd.visible_shadow = False
+        a_ = TAU * k / 4 + 0.5
+        blades.add(L.box(7.8, 0.45, 0.08).transform(Matrix.Translation((0.3 + 3.9 * math.cos(a_), 3.9 * math.sin(a_),
+                                                                         2.95)) @ Matrix.Rotation(a_, 4, "Z")))
+    disc = grid(lambda u, v, i, j: (0.3 + v * 8.0 * math.cos(u), v * 8.0 * math.sin(u), 3.0 + 0.2 * v),
+                lin(0, TAU, 48), lin(0.05, 1, 4), closed_u=True)
+    put("Helicopter", heli.transform(hm), heli_mat)
+    put("Helicopter_Blades", blades.transform(hm.copy()), heli_mat, smooth_=False)
+    put("Helicopter_Rotor_Blur", disc.transform(hm.copy()), mat_rotor_disc(), shadow=False, diffuse=False)
+    nl = MD()
+    nl.add(L.uv_sphere(0.35, 10, 6).translate(hm @ V((5.1, 0.0, -0.3))))
+    put("Helicopter_Nose_Light", nl, mat_emit("Heli_Nose_Light", (0.85, 0.72, 0.69), 30.0), shadow=False)
 
-    # ------------------------------------------------------------------ mountains (right) and low ridges (left)
-    mts = MD()
-    for (g0, g1, dist, hmax, seed) in ((4.0, 32.0, 1800.0, 260.0, 1), (-30.0, -6.0, 2600.0, 140.0, 2),
-                                       (10.0, 40.0, 2600.0, 380.0, 3)):
-        def mf(u, v, i, j, g0=g0, g1=g1, dist=dist, hmax=hmax, seed=seed):
-            g = lerp(g0, g1, u)
-            ridge = hmax * (0.45 + 0.55 * abs(math.sin(u * 7.3 + seed)) ** 1.5) * (0.6 + 0.4 * math.sin(u * 3.1 + seed * 2))
-            ridge *= smooth(min(u, 1 - u) / 0.12)
-            p = at(g, dist + 120.0 * v, WATER_Z)
-            return V((p.x, p.y, WATER_Z + ridge * (1 - v) ** 0.5 + 15.0 * L.fbm(V((u * 9, v * 3, seed))) * (1 - v)))
-        mts.add(grid(mf, lin(0, 1, 90), lin(0, 1, 8)))
-    put("Mountains", mts, rock)
+    # ------------------------------------------------------------------ fjord mountains (right), 5 km
+    Dm = 5000.0
+    ridge = [(780, 470), (812, 380), (830, 300), (846, 236), (852, 226), (860, 218), (870, 213), (880, 205),
+             (885, 202), (910, 198), (920, 193), (928, 190), (960, 192), (1000, 188), (1040, 190), (1070, 186),
+             (1100, 184), (1104, 182), (1112, 185), (1120, 188), (1128, 184), (1136, 179), (1144, 178),
+             (1200, 172), (1300, 176), (1420, 168)]
 
-    # ------------------------------------------------------------------ floodlights at the water's edge + lamp posts
-    lamps = MD()
-    for li, (g, d_, h, r) in enumerate(((-13.6, 34.0, 0.15, 0.10), (-11.0, 40.0, 0.05, 0.08), (-3.4, 30.0, 0.10, 0.09),
-                        (12.0, 17.6, 0.55, 0.16), (8.0, 45.0, 0.0, 0.10), (2.6, 60.0, -0.2, 0.10))):
-        p = at(g, d_, h)
-        lamps.add(L.uv_sphere(r, 16, 10).translate(p))
-        ld = bpy.data.lights.new("Floodlight_%d" % li, "POINT")
-        ld.energy = 250.0
-        ld.color = (0.80, 0.88, 1.0)
-        ld.shadow_soft_size = 0.3
-        lo = bpy.data.objects.new(ld.name, ld)
-        coll.objects.link(lo)
-        lo.location = p + V((0, -0.4, 0.0))
-        lo.parent = root
-    put("Floodlight_Bulbs", lamps, lamp_mat)
+    def ry(x):
+        for (xa, ya), (xb, yb) in zip(ridge, ridge[1:]):
+            if x <= xb:
+                return lerp(ya, yb, (x - xa) / (xb - xa))
+        return ridge[-1][1]
 
-    # ------------------------------------------------------------------ mist banks over the water
-    for k, (dist, h, dens) in enumerate(((45.0, 6.0, 0.35), (110.0, 14.0, 0.45), (260.0, 40.0, 0.55))):
-        card = grid(lambda u, v, i, j, dist=dist, h=h: tuple(at(lerp(-28, 28, u), dist, WATER_Z + v * h)),
-                    lin(0, 1, 12), lin(0, 1, 4))
-        ob = put(f"Mist_{k}", card, mat_mist(f"Mist_{k}", (0.14, 0.16, 0.22), dens))
-        ob.visible_shadow = False
-        ob.visible_diffuse = False
+    def mtn(u, v, i, j):
+        y = lerp(ry(u) + 1.5 * L.fbm(V((u * 0.15, 0.3, 1.0))), 508.0, v)
+        d = Dm + 220.0 * (1 - v) + 120.0 * L.fbm(V((u * 0.05, v * 2.0, 4.0)))
+        return sheet_pt(u, y, d)
+    put("Mountains", grid(mtn, lin(780, 1420, 220), lin(0, 1, 18)),
+        fog_wrap(mat_rock(), scale=2400.0, max_fac=0.72, top=3000.0, top_keep=0.85))

@@ -40,15 +40,15 @@ def make_suit_camo(S=2048):
 
     The concept suit is near-black with thin grey linework that follows wavy contours and breaks up,
     plus slightly lighter charcoal blotches."""
-    # the texture tiles over ~0.8 m of fabric: contour spacing ~2-4 cm, line width ~3 mm
+    # the texture tiles over ~0.8 m of fabric: contour spacing ~1-2.5 cm, line width ~3 mm
     base = periodic_noise(S, 5.0, 11, None)
     warp = periodic_noise(S, 11.0, 12, None)
     field = base + 0.30 * warp
     gy, gx = np.gradient(field)
     g = np.sqrt(gx * gx + gy * gy) + 1e-6
-    f = field * 3.2
-    d = np.abs(f - np.round(f)) / (g * 3.2)  # distance to the nearest contour in pixels
-    lines = np.exp(-(d / 3.2) ** 2)
+    f = field * 5.5
+    d = np.abs(f - np.round(f)) / (g * 5.5)  # distance to the nearest contour in pixels
+    lines = np.exp(-(d / 4.2) ** 2)
     # break the lines up so they read as printed linework, not a topographic map
     breakup = periodic_noise(S, 18.0, 13, None)
     lines *= np.clip((breakup + 0.6) * 1.2, 0, 1)

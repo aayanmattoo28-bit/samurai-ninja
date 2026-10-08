@@ -15,6 +15,7 @@ import seal_body as B
 
 T_PLATE = 0.035
 BEND_R = 0.60
+GEAR_FRAMES = {}  # pouch frames that seal_weapons fills with the carried gear
 
 
 def front_y(x, outer=True):
@@ -218,6 +219,7 @@ def build(coll, root):
         a = math.radians(40)
         p, x, n, z = frame_dir(cx, -0.205, (z0 + z1) / 2, s * math.sin(a), -math.cos(a), 0.060)
         m = pouch(tgt[0], tgt[1], trims, metal, p, x, n, z, 0.080, z1 - z0, 0.060, flap=0.26, bungee=False)
+        GEAR_FRAMES["corner_" + ("E" if s > 0 else "W")] = m
         if s < 0:  # light chem-light clip at the top inner corner (end of the coiled cable)
             hard.add(L.lathe([(0.0, 0.0), (0.006, 0.0), (0.006, 0.030), (0.0, 0.034)], 10)
                      .transform(m @ Matrix.Translation((0.030, 0.064, 0.060))))
