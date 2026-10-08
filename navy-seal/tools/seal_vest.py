@@ -174,7 +174,7 @@ def build(coll, root):
             zz = 1.098 + k * 0.0305
             row = [V((s * p.x * 1.0 + s * 0.012 * 0, p.y, zz)) for p in plan]
             row = [V((s * abs(p.x) + s * 0.013, p.y, zz)) for p in plan]
-            molle.add(sweep(row, rect_profile(0.025, 0.003), up=(0, 0, 1)))
+            molle.add(sweep(row, rect_profile(0.003, 0.025), up=(0, 0, 1)))   # 25 mm webbing, 3 mm proud
 
     # ------------------------------------------------------------------ upper row
     p, x, n, z = frame_flat(-0.1055, 1.3855)

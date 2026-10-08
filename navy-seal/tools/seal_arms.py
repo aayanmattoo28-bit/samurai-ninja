@@ -154,7 +154,7 @@ def build(coll, root):
                 c2, T2, N2, B2 = B.limb_frame(path, tt)
                 ring = [c2 + (N2 * math.cos(u) + B2 * math.sin(u)) * (gr(tt, u, tw0, tm, 0.003))
                         for u in lin(0, TAU, 37)[:-1]]
-                gaunt.add(sweep(ring, rect_profile(0.004, wdt), closed_path=True, up=lambda i, p, c2=c2: p - c2))
+                gaunt.add(sweep(ring, rect_profile(wdt, 0.004), closed_path=True, up=lambda i, p, c2=c2: p - c2))
             c2, T2, N2, B2 = B.limb_frame(path, lerp(tw0, tw1, 0.05) - 0.02)
             o2 = (B2 * -1).normalized()
             hw.add(lathe([(0.0, 0.0), (0.004, 0.0), (0.004, 0.003), (0.0, 0.004)], 12)

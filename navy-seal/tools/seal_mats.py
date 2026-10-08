@@ -298,6 +298,9 @@ def build_materials():
                                     blot2=(0.060, 0.051, 0.040), line=(0.30, 0.265, 0.205), tiles=2.6, line_amt=0.75)
     M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.007, 0.0075, 0.008), blot1=(0.013, 0.014, 0.015),
                                     blot2=(0.030, 0.031, 0.033), line=(0.20, 0.20, 0.19), tiles=2.6, line_amt=0.75)
+    M["belt"] = mat_nylon_camo("Belt_Webbing_Print", base=(0.024, 0.022, 0.019), blot1=(0.042, 0.038, 0.032),
+                               blot2=(0.075, 0.068, 0.058), line=(0.24, 0.22, 0.18), tiles=3.2, line_amt=0.7,
+                               edge_col=(0.20, 0.19, 0.17))
     M["carrier"] = mat_nylon_camo("Carrier_Cordura_Print", base=(0.007, 0.007, 0.0072), blot1=(0.014, 0.0135, 0.012),
                                   blot2=(0.026, 0.025, 0.022), line=(0.070, 0.066, 0.056), tiles=2.2, line_amt=0.7,
                                   edge_col=(0.060, 0.058, 0.054))

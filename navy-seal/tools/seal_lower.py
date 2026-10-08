@@ -74,7 +74,7 @@ def leg_strap(side, z_out, z_in, width, off=0.006, u_in=None):
         dz = (z_out - zm) * (1 - 2 * smooth(f))
         q = B.limb_pt(path, B.leg_radius, t, a, off) + V((0, 0, dz))
         pts.append(q)
-    md = sweep(pts, rect_profile(0.003, width), closed_path=True, up=lambda i, p, c=c: (p - c))
+    md = sweep(pts, rect_profile(width, 0.003), closed_path=True, up=lambda i, p, c=c: (p - c))   # width along the leg
     buckle_p = B.limb_pt(path, B.leg_radius, t, u_in, off + 0.004) + V((0, 0, (z_in - zm)))
     return md, buckle_p, (buckle_p - c).normalized()
 
@@ -189,7 +189,7 @@ def build_boot(side, boots, soles, mids, laces, metal, trim):
     ts = leg_t_at_z(path, 0.150)
     c1, T1, N1, B1 = B.limb_frame(path, min(1.0, ts))
     ring = [c1 + (N1 * math.cos(u) + B1 * math.sin(u)) * (shaft_r(0.6, u) + 0.003) for u in lin(0, TAU, 33)[:-1]]
-    trim.add(sweep(ring, rect_profile(0.003, 0.020), closed_path=True, up=lambda i, p, c=c1: p - c))
+    trim.add(sweep(ring, rect_profile(0.020, 0.003), closed_path=True, up=lambda i, p, c=c1: p - c))
     outv = V((side, 0.0, 0.0))
     ladder_buckle(metal, c1 + outv * 0.056, outv, w=0.025, h=0.020)
     for k in range(4):
@@ -266,7 +266,7 @@ def build(coll, root):
     # ------------------------------------------------------------------ battle belt (segmented), buckle, ring, cord
     ths = lin(-math.pi, math.pi, 160)
     ring = [belt_pt(th, (BELT_Z0 + BELT_Z1) / 2, -0.007) for th in ths[:-1]]
-    belt.add(sweep(ring, rect_profile(0.014, 0.067, 2), closed_path=True,
+    belt.add(sweep(ring, rect_profile(0.067, 0.014, 2), closed_path=True,      # x -> vertical, y -> radial
                    up=lambda i, p: belt_normal(ths[i])))
     for k in range(22):  # box segments (laser-cut MOLLE windows) separated by webbing bars
         th = -math.pi + TAU * (k + 0.5) / 22
@@ -284,15 +284,17 @@ def build(coll, root):
         th = math.radians(th_d)
         n = belt_normal(th)
         trims.add(box(0.050, 0.055, 0.004).transform(look_matrix(belt_pt(th, 1.020, 0.002), n, (0, 0, 1))))
-    # cobra buckle
+    # cobra buckle (gunmetal, catches the key light like the sheet's bright centre buckle)
+    buckle = MD()
     bm = look_matrix(V((0.0, -0.142, 1.020)), (0, -1, 0), (0, 0, 1))
-    belt_hw.add(box(0.058, 0.058, 0.014).transform(bm @ Matrix.Translation((0, 0, 0.007))))
-    for (w, h, x, y) in ((0.058, 0.006, 0, 0.026), (0.058, 0.006, 0, -0.026), (0.006, 0.058, 0.026, 0),
-                         (0.006, 0.058, -0.026, 0), (0.040, 0.003, 0, 0.0)):
-        belt_hw.add(box(w, h, 0.004).transform(bm @ Matrix.Translation((x, y, 0.016))))
+    buckle.add(box(0.068, 0.062, 0.014).transform(bm @ Matrix.Translation((0, 0, 0.007))))
+    for (w, h, x, y) in ((0.068, 0.007, 0, 0.0275), (0.068, 0.007, 0, -0.0275), (0.007, 0.062, 0.0305, 0),
+                         (0.007, 0.062, -0.0305, 0), (0.046, 0.004, 0, 0.0)):
+        buckle.add(box(w, h, 0.005).transform(bm @ Matrix.Translation((x, y, 0.0165))))
     for sx in (-1, 1):
-        belt_hw.add(lathe([(0.0, 0.0), (0.0025, 0.0), (0.0025, 0.002), (0.0, 0.0025)], 10)
-                    .transform(bm @ Matrix.Translation((sx * 0.020, 0.020, 0.018))))
+        buckle.add(lathe([(0.0, 0.0), (0.003, 0.0), (0.003, 0.002), (0.0, 0.003)], 10)
+                   .transform(bm @ Matrix.Translation((sx * 0.022, 0.021, 0.019))))
+        buckle.add(box(0.016, 0.050, 0.010).transform(bm @ Matrix.Translation((sx * 0.044, 0, 0.004))))  # wings
     # O-ring on the front-left and the light lanyard cord in two loops with a knot
     th = math.radians(70)
     rp = belt_pt(th, 1.025, 0.012)
@@ -472,9 +474,11 @@ def build(coll, root):
         build_boot(side, boots, soles, mids, laces, bmetal, btrim)
 
     # ------------------------------------------------------------------ objects
-    ob = to_obj("Battle_Belt", belt, M["webbing"], coll, parent=root)
+    ob = to_obj("Battle_Belt", belt, M["belt"], coll, parent=root)
     mod_subsurf(ob, 0, 1)
-    to_obj("Battle_Belt_Segments_Buckle", belt_hw, M["polymer_gloss"], coll, parent=root)
+    to_obj("Battle_Belt_Segments", belt_hw, M["polymer_gloss"], coll, parent=root)
+    ob = to_obj("Belt_Cobra_Buckle", buckle, M["metal"], coll, parent=root, smooth=False)
+    mod_bevel(ob, 0.0015, 1)
     to_obj("Belt_Lanyard_Cord", cord, M["cable_grey"], coll, parent=root)
     ob = to_obj("Lower_Pouches", pouches, M["carrier"], coll, parent=root)
     mod_bevel(ob, 0.005, 3)
