@@ -50,9 +50,11 @@ def frame_dir(cx, cy, zc, nx, ny, d):
     return p, x, n, V((0, 0, 1))
 
 
-def pouch(md_body, md_flap, md_trim, md_metal, p, x, n, z, w, h, d, flap=0.24, bungee=True, tab=True, bands=2):
+def pouch(md_body, md_flap, md_trim, md_metal, p, x, n, z, w, h, d, flap=0.24, bungee=True, tab=True, bands=2,
+          md_pipe=None):
     """Pouch on a surface frame: p = centre of its back face; body w (x) by h (z) by d (n).  Rounded body (bevel
-    on the object), overhanging top flap with a pull tab, optional bungee, elastic bands, bottom drain grommet."""
+    on the object), overhanging top flap with a pull tab, optional bungee, elastic bands, bottom drain grommet,
+    and (md_pipe) the light piping that outlines the flap on the sheet's chest pouches."""
     m = Matrix((x, n, z)).transposed().to_4x4()
     m.translation = p
     b = box(w, d, h)
@@ -84,6 +86,13 @@ def pouch(md_body, md_flap, md_trim, md_metal, p, x, n, z, w, h, d, flap=0.24, b
     for k in range(bands):
         md_trim.add(box(w + 0.004, 0.003, 0.012).transform(m @ Matrix.Translation((0, d + 0.0005, -h * (0.18 + 0.2 * k)))))
     md_metal.add(torus_md(0.0035, 0.0012, 12, 4).transform(m @ Matrix.Translation((0, d * 0.5, -h / 2 - 0.0005))))
+    if md_pipe is not None:
+        hw, zt, zb, rc = w / 2 + 0.0030, h / 2 + 0.003, h / 2 + 0.004 - fh, 0.010
+        outline = ([(-hw, zt), (-hw, zb + rc)] + [(-hw + rc - rc * math.cos(a), zb + rc - rc * math.sin(a))
+                                                    for a in lin(0.3, math.pi / 2, 4)] +
+                   [(hw - rc + rc * math.sin(a), zb + rc - rc * math.cos(a)) for a in lin(0.0, math.pi / 2 - 0.3, 4)] +
+                   [(hw, zb + rc), (hw, zt)])
+        md_pipe.add(tube([m @ V((xx, d + 0.0062, zz)) for xx, zz in outline], 0.0015, 5))
     return m
 
 
@@ -169,9 +178,9 @@ def build(coll, root):
 
     # ------------------------------------------------------------------ upper row
     p, x, n, z = frame_flat(-0.1055, 1.3855)
-    pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.075, 0.133, 0.035, flap=0.33, bungee=False)
+    pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.075, 0.133, 0.035, flap=0.33, bungee=False, md_pipe=hard)
     p, x, n, z = frame_flat(0.092, 1.3855)
-    pouch(pouch_w, flap_w, trims, metal, p, x, n, z, 0.072, 0.133, 0.035, flap=0.33, bungee=False)
+    pouch(pouch_w, flap_w, trims, metal, p, x, n, z, 0.072, 0.133, 0.035, flap=0.33, bungee=False, md_pipe=hard)
     for xs_ in (0.083, 0.101):  # light stitch lines on its face
         hard.add(box(0.003, 0.002, 0.07).translate((xs_, front_y(xs_) - 0.0365, 1.355)))
     # dive computer: housing, recessed screen, knurled knob, bezel strip, strap tab up into the clip box
@@ -205,7 +214,7 @@ def build(coll, root):
         p, x, n, z = frame_flat(xc, (z0 + z1) / 2)
         tgt_b, tgt_f = (pouch_w, flap_w) if kind == "D" else (pouches, flaps)
         m = pouch(tgt_b, tgt_f, trims, metal, p, x, n, z, x1 - x0, z1 - z0, 0.066, flap=0.24,
-                  bungee=(kind == "B"), tab=(kind != "C"), bands=2)
+                  bungee=(kind == "B"), tab=(kind != "C"), bands=2, md_pipe=hard)
         if kind == "C":  # dagger-shaped pull tab with a crossbar
             hard.add(box(0.006, 0.004, 0.069).transform(m @ Matrix.Translation((0.002, 0.071, 0.040))))
             hard.add(box(0.016, 0.004, 0.004).transform(m @ Matrix.Translation((0.002, 0.071, 0.046))))
@@ -213,12 +222,14 @@ def build(coll, root):
             metal.add(lathe([(0.0, 0.0), (0.004, 0.0), (0.004, 0.002), (0.0, 0.002)], 12)
                       .transform(m @ Matrix.Translation((0.010, 0.071, 0.072)) @ Matrix.Rotation(-math.pi / 2, 4, "X")))
     p, x, n, z = frame_flat(-0.045, 1.1975)
-    pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.034, 0.175, 0.040, flap=0.17, bungee=False, tab=False, bands=0)
+    pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.034, 0.175, 0.040, flap=0.17, bungee=False, tab=False, bands=0,
+          md_pipe=hard)
     # corner pouches on the cummerbund front corners, angled ~40 deg outward
     for s, cx, z0, z1, tgt in ((-1, -0.215, 1.104, 1.263, (pouch_c, flap_c)), (1, 0.205, 1.101, 1.256, (pouch_w, flap_w))):
         a = math.radians(40)
         p, x, n, z = frame_dir(cx, -0.205, (z0 + z1) / 2, s * math.sin(a), -math.cos(a), 0.060)
-        m = pouch(tgt[0], tgt[1], trims, metal, p, x, n, z, 0.080, z1 - z0, 0.060, flap=0.26, bungee=False)
+        m = pouch(tgt[0], tgt[1], trims, metal, p, x, n, z, 0.080, z1 - z0, 0.060, flap=0.26, bungee=False,
+                  md_pipe=hard)
         GEAR_FRAMES["corner_" + ("E" if s > 0 else "W")] = m
         if s < 0:  # light chem-light clip at the top inner corner (end of the coiled cable)
             hard.add(L.lathe([(0.0, 0.0), (0.006, 0.0), (0.006, 0.030), (0.0, 0.034)], 10)
@@ -231,13 +242,15 @@ def build(coll, root):
     for s in (-1, 1):
         p, x, n, z = frame_dir(s * 0.2225, -0.145, 1.186, s, 0, 0.055)
         m = pouch(pouch_c if s < 0 else pouches, flap_c if s < 0 else flaps, trims, metal, p, x, n, z,
-                  0.075, 0.152, 0.055, flap=0.20, bungee=False)
+                  0.075, 0.152, 0.055, flap=0.20, bungee=False, md_pipe=hard)
         sp = [V((0.012 * t * math.cos(t * 5.5), 0.056, 0.035 + 0.012 * t * math.sin(t * 5.5))) for t in lin(0.1, 1.6, 30)]
         hard.add(tube([m @ q for q in sp], 0.0014, 5))  # swirl ornament
         p, x, n, z = frame_dir(s * 0.2125, -0.085, 1.183, s, 0, 0.045)
-        pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.055, 0.145, 0.045, flap=0.20, bungee=False, tab=False)
+        pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.055, 0.145, 0.045, flap=0.20, bungee=False, tab=False,
+              md_pipe=hard)
         p, x, n, z = frame_dir(s * 0.180, 0.165, 1.1665, s * 0.707, 0.707, 0.055)
-        pouch(pouch_w, flap_w, trims, metal, p, x, n, z, 0.080, 0.149, 0.055, flap=0.23, bungee=False)
+        pouch(pouch_w, flap_w, trims, metal, p, x, n, z, 0.080, 0.149, 0.055, flap=0.23, bungee=False,
+              md_pipe=hard)
 
     # ------------------------------------------------------------------ back: drag handle, central case
     bk = MD()

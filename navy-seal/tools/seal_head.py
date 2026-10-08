@@ -114,11 +114,11 @@ def build(coll, root):
 
     def band_z(th):
         a = abs(math.degrees(math.atan2(math.sin(th), math.cos(th))))
-        return interp_smooth([(0, 1.768), (40, 1.778), (60, 1.781), (110, 1.781), (140, 1.762), (180, 1.756)], a)[0]
+        return interp_smooth([(0, 1.768), (40, 1.778), (60, 1.781), (110, 1.781), (140, 1.772), (180, 1.770)], a)[0]
 
     def band_h(th):
         a = abs(math.degrees(math.atan2(math.sin(th), math.cos(th))))
-        return interp_smooth([(0, 0.020), (110, 0.022), (150, 0.036), (180, 0.040)], a)[0]
+        return interp_smooth([(0, 0.020), (110, 0.022), (150, 0.028), (180, 0.030)], a)[0]
 
     ths = lin(-math.pi, math.pi, 128)
     band, ups = [], []
@@ -159,11 +159,12 @@ def build(coll, root):
             LENSES.add(lathe([(0.0, 0.0), (0.006, 0.0), (0.006, 0.002), (0.0, 0.002)], 16)
                        .transform(look_matrix(lp, n, (0, 0, 1))))
             metal.add(torus_md(0.0068, 0.0015, 16, 4).transform(look_matrix(lp, n, (0, 0, 1))))
-        p, n = on_shell(s * math.radians(142), 1.800, 0.004)  # rear antenna boxes + whip rods + pale lens
-        bm = tbox(poly, p, n, 0.035, 0.050, 0.026)
-        top = bm @ V((0, 0.025, 0.013))
-        metal.add(tube([top, top + V((s * 0.003, 0.002, 0.036))], 0.0025, 8))
-        metal.add(uv_sphere(0.004, 8, 5).translate(top + V((s * 0.003, 0.002, 0.040))))
+        p, n = on_shell(s * math.radians(132), 1.748, 0.004)  # rear antenna mounts low on the sides + tall rods
+        bm = tbox(poly, p, n, 0.028, 0.044, 0.022)
+        top = bm @ V((0, 0.022, 0.011))
+        metal.add(tube([top, top + V((s * 0.004, 0.003, 0.105))], 0.0025, 8))
+        metal.add(box(0.008, 0.008, 0.014).translate(top + V((s * 0.003, 0.002, 0.060))))
+        metal.add(uv_sphere(0.004, 8, 5).translate(top + V((s * 0.004, 0.003, 0.108))))
         LENSES.add(lathe([(0.0, 0.0), (0.005, 0.0), (0.005, 0.002), (0.0, 0.002)], 12)
                    .transform(look_matrix(bm @ V((0.0, -0.016, 0.0135)), n, (0, 0, 1))))
         a = helmet_pt(s * math.radians(36), math.radians(48), 0.004)  # small strap across the upper side

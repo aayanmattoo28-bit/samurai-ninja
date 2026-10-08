@@ -1,6 +1,8 @@
-"""Build the U.S. Navy SEAL character and its harbour turnaround set; save navy-seal/navy_seal.blend.
+"""Build the U.S. Navy SEAL character (turnaround camera, four views, light rig); save navy-seal/navy_seal.blend.
 
-    python navy-seal/tools/seal_build.py [--out path.blend] [--parts body,head,vest,lower,weapons] [--no-env] [--no-save]
+    python navy-seal/tools/seal_build.py [--out path.blend] [--parts body,head,vest,lower,weapons] [--no-save]
+The file holds the character only (shown from the sheet's four turnaround angles); --env adds the old harbour
+backdrop for side-by-side comparison renders against the concept sheet and is never saved into navy_seal.blend.
 (run with the `bpy` module, or `blender --background --python navy-seal/tools/seal_build.py`)
 """
 import importlib
@@ -30,7 +32,7 @@ MODULES = [
 
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else sys.argv[1:]
-    o = {"out": os.path.join(SEAL_ROOT, "navy_seal.blend"), "parts": None, "env": True, "save": True}
+    o = {"out": os.path.join(SEAL_ROOT, "navy_seal.blend"), "parts": None, "env": False, "save": True}
     i = 0
     while i < len(argv):
         a = argv[i]
@@ -42,9 +44,13 @@ def parse_args():
             i += 1
         elif a == "--no-env":
             o["env"] = False
+        elif a == "--env":
+            o["env"] = True
         elif a == "--no-save":
             o["save"] = False
         i += 1
+    if o["env"] and o["out"] == os.path.join(SEAL_ROOT, "navy_seal.blend"):
+        o["save"] = False      # the backdrop is for comparison renders only; navy_seal.blend stays character-only
     return o
 
 

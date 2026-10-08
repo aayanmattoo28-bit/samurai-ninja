@@ -159,8 +159,8 @@ def compositor(sc, calib=False):
 
 # --- world (lighting / reflections only; the camera sees the sky card) -------------------------------------
 def world(sc):
-    """Overcast dusk dome: slate zenith, blue-grey horizon, the peach glow toward the setting sun (+X +Y), dark
-    below the horizon."""
+    """Overcast dusk dome (lighting and reflections only): slate zenith, blue-grey horizon, the peach glow toward
+    the setting sun (+X +Y), dark below the horizon.  Camera rays see a plain dark studio grey."""
     w = bpy.data.worlds.new("Harbour_Dusk_Dome")
     sc.world = w
     nb = NB(w)
@@ -180,8 +180,16 @@ def world(sc):
     bg = nb.n("ShaderNodeBackground", (200, 0))
     nb.link(col, bg.inputs["Color"])
     bg.inputs["Strength"].default_value = 0.55
-    o = nb.n("ShaderNodeOutputWorld", (400, 0))
-    nb.link(bg.outputs[0], o.inputs["Surface"])
+    # the camera sees a plain dark studio grey; the dusk dome only lights and reflects on the character
+    studio = nb.n("ShaderNodeBackground", (200, -200))
+    studio.inputs["Color"].default_value = (0.020, 0.021, 0.024, 1)
+    lp = nb.n("ShaderNodeLightPath", (0, 300))
+    mx = nb.n("ShaderNodeMixShader", (400, 0))
+    nb.link(lp.outputs["Is Camera Ray"], mx.inputs[0])
+    nb.link(bg.outputs[0], mx.inputs[1])
+    nb.link(studio.outputs[0], mx.inputs[2])
+    o = nb.n("ShaderNodeOutputWorld", (600, 0))
+    nb.link(mx.outputs[0], o.inputs["Surface"])
 
 
 # --- lights ------------------------------------------------------------------------------------------------
@@ -487,7 +495,7 @@ def mat_rotor_disc(name="Rotor_Blur_Disc"):
     em.inputs["Color"].default_value = (0.082, 0.084, 0.11, 1)
     tr = nb.n("ShaderNodeBsdfTransparent", (0, 100))
     mx = nb.n("ShaderNodeMixShader", (300, 0))
-    mx.inputs[0].default_value = 0.25
+    mx.inputs[0].default_value = 0.07
     nb.link(tr.outputs[0], mx.inputs[1])
     nb.link(em.outputs[0], mx.inputs[2])
     nb.output(mx.outputs[0])
@@ -691,7 +699,7 @@ def build_environment(sc):
                                     rust=0.0), max_fac=0.18)
     crane_mat = fog_wrap(mat_paint("Crane_Breakwater_Dark", (0.008, 0.011, 0.016), rough=0.6, streak=0.1),
                          max_fac=0.20)
-    heli_mat = fog_wrap(mat_paint("Helicopter_Navy_Grey", (0.11, 0.13, 0.16), rough=0.36, metal=0.25,
+    heli_mat = fog_wrap(mat_paint("Helicopter_Navy_Grey", (0.15, 0.17, 0.20), rough=0.34, metal=0.3,
                                   streak=0.15, rust=0.0), max_fac=0.25)
     windows = mat_emit("Ship_Window_Amber", (0.53, 0.25, 0.11), 2.0)
 
@@ -828,9 +836,10 @@ def build_environment(sc):
     put("Ship_Windows", win, windows, shadow=False)
 
     # ------------------------------------------------------------------ helicopter hovering top right (nose-up flare)
-    Dh = 300.0
-    hm = Matrix.Translation(sheet_pt(925, 88, Dh)) @ Matrix.Rotation(math.radians(-62), 4, "Z") @ \
-        Matrix.Rotation(math.radians(-18), 4, "Y") @ Matrix.Rotation(math.radians(12), 4, "X")
+    Dh = 185.0
+    hm = Matrix.Translation(sheet_pt(915, 92, Dh)) @ Matrix.Rotation(math.radians(-84), 4, "Z") @ \
+        Matrix.Rotation(math.radians(-16), 4, "Y") @ Matrix.Rotation(math.radians(12), 4, "X") @ \
+        Matrix.Diagonal((1.0, 1.18, 1.18, 1.0))
     heli = MD()
 
     def fus(u, v, i, j):
@@ -851,7 +860,7 @@ def build_environment(sc):
     blades = MD()
     for k in range(4):
         a_ = TAU * k / 4 + 0.5
-        blades.add(L.box(7.8, 0.45, 0.08).transform(Matrix.Translation((0.3 + 3.9 * math.cos(a_), 3.9 * math.sin(a_),
+        blades.add(L.box(7.8, 0.30, 0.06).transform(Matrix.Translation((0.3 + 3.9 * math.cos(a_), 3.9 * math.sin(a_),
                                                                          2.95)) @ Matrix.Rotation(a_, 4, "Z")))
     disc = grid(lambda u, v, i, j: (0.3 + v * 8.0 * math.cos(u), v * 8.0 * math.sin(u), 3.0 + 0.2 * v),
                 lin(0, TAU, 48), lin(0.05, 1, 4), closed_u=True)
@@ -859,8 +868,8 @@ def build_environment(sc):
     put("Helicopter_Blades", blades.transform(hm.copy()), heli_mat, smooth_=False)
     put("Helicopter_Rotor_Blur", disc.transform(hm.copy()), mat_rotor_disc(), shadow=False, diffuse=False)
     nl = MD()
-    nl.add(L.uv_sphere(0.35, 10, 6).translate(hm @ V((5.1, 0.0, -0.3))))
-    put("Helicopter_Nose_Light", nl, mat_emit("Heli_Nose_Light", (0.85, 0.72, 0.69), 30.0), shadow=False)
+    nl.add(L.uv_sphere(0.16, 10, 6).translate(hm @ V((5.15, 0.0, -0.3))))
+    put("Helicopter_Nose_Light", nl, mat_emit("Heli_Nose_Light", (0.85, 0.72, 0.69), 12.0), shadow=False)
 
     # ------------------------------------------------------------------ fjord mountains (right), 5 km
     # a real heightfield (slopes, buttresses and gullies that take the sun rig) whose crest projects exactly onto the

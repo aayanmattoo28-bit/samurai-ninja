@@ -292,12 +292,12 @@ def build_materials():
     M["screen"] = mat_screen()
     M["patch_flag"] = mat_patch()
     M["helmet"] = mat_polymer("Helmet_Shell_Cover", base=(0.026, 0.027, 0.030), rough=0.55, grain=900.0)
-    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.012, 0.012, 0.012), blot1=(0.026, 0.025, 0.022),
-                                     blot2=(0.055, 0.052, 0.045), line=(0.20, 0.185, 0.155), tiles=2.6)
-    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.018, 0.016, 0.013), blot1=(0.038, 0.033, 0.027),
-                                    blot2=(0.080, 0.070, 0.057), line=(0.24, 0.215, 0.17), tiles=2.6)
-    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.010, 0.011, 0.012), blot1=(0.020, 0.021, 0.023),
-                                    blot2=(0.040, 0.041, 0.043), line=(0.15, 0.15, 0.14), tiles=2.6)
+    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.008, 0.008, 0.008), blot1=(0.016, 0.015, 0.013),
+                                     blot2=(0.040, 0.037, 0.031), line=(0.26, 0.24, 0.20), tiles=2.6, line_amt=0.75)
+    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.012, 0.010, 0.008), blot1=(0.024, 0.020, 0.016),
+                                    blot2=(0.060, 0.051, 0.040), line=(0.30, 0.265, 0.205), tiles=2.6, line_amt=0.75)
+    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.007, 0.0075, 0.008), blot1=(0.013, 0.014, 0.015),
+                                    blot2=(0.030, 0.031, 0.033), line=(0.20, 0.20, 0.19), tiles=2.6, line_amt=0.75)
     M["carrier"] = mat_nylon_camo("Carrier_Cordura_Print", base=(0.007, 0.007, 0.0072), blot1=(0.014, 0.0135, 0.012),
                                   blot2=(0.026, 0.025, 0.022), line=(0.070, 0.066, 0.056), tiles=2.2, line_amt=0.7,
                                   edge_col=(0.060, 0.058, 0.054))
