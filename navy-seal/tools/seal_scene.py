@@ -73,7 +73,7 @@ def setup_render(sc):
     sc.render.resolution_x, sc.render.resolution_y = 600, 1300
     sc.view_settings.view_transform = "AgX"
     try:
-        sc.view_settings.look = "AgX - Medium High Contrast"
+        sc.view_settings.look = "AgX - High Contrast"
     except Exception:
         pass
     sc.view_settings.exposure = 0.0
@@ -99,9 +99,9 @@ def compositor(sc):
     gl.mix = -0.6
     cb = nt.nodes.new("CompositorNodeColorBalance")
     cb.correction_method = "LIFT_GAMMA_GAIN"
-    cb.lift = (0.990, 0.998, 1.020)
-    cb.gamma = (0.975, 1.0, 1.045)
-    cb.gain = (0.98, 1.0, 1.03)
+    cb.lift = (0.998, 0.999, 1.006)
+    cb.gamma = (0.995, 1.0, 1.012)
+    cb.gain = (1.0, 1.0, 1.0)
     hs = nt.nodes.new("CompositorNodeHueSat")
     hs.inputs["Saturation"].default_value = 0.85
     em = nt.nodes.new("CompositorNodeEllipseMask")
@@ -173,7 +173,7 @@ def world(sc, follow):
     bg_cam.inputs["Strength"].default_value = 1.0
     bg_lit = nb.n("ShaderNodeBackground", (200, -100))
     nb.link(col, bg_lit.inputs["Color"])
-    bg_lit.inputs["Strength"].default_value = 0.55
+    bg_lit.inputs["Strength"].default_value = 0.30
     lp = nb.n("ShaderNodeLightPath", (0, 300))
     fac = nb.math("MAXIMUM", lp.outputs["Is Camera Ray"], lp.outputs["Is Glossy Ray"])
     mx = nb.n("ShaderNodeMixShader", (400, 0))
@@ -216,11 +216,11 @@ def build_lights(sc):
     char = bpy.data.collections.get("NavySeal_Character")
     c = (0, 0, 1.1)
     # cool moonlit key high front-left, soft blue fill, white-blue rims that trace the wet edges
-    area("Key_Moon", coll, (-3.0, -4.2, 5.0), c, 420, (0.70, 0.80, 1.0), 2.0, rig)
-    lk = [area("Fill_Blue", coll, (4.0, -3.5, 1.6), c, 60, (0.45, 0.58, 1.0), 4.0, rig),
+    area("Key_Moon", coll, (-3.0, -4.2, 5.0), c, 480, (0.86, 0.90, 1.0), 1.6, rig)
+    lk = [area("Fill_Blue", coll, (4.0, -3.5, 1.6), c, 35, (0.62, 0.70, 0.90), 4.0, rig),
           area("Rim_Left", coll, (-2.0, 3.4, 3.0), (0, 0, 1.3), 35, (0.75, 0.85, 1.0), 1.4, rig, spread=40),
           area("Rim_Right", coll, (2.2, 3.2, 2.2), (0, 0, 1.1), 30, (1.0, 0.82, 0.78), 1.4, rig, spread=40),
-          area("Top_Sky", coll, (0.0, 0.8, 5.0), (0, 0, 1.4), 60, (0.62, 0.70, 0.95), 3.0, rig),
+          area("Top_Sky", coll, (0.0, 0.8, 5.0), (0, 0, 1.4), 60, (0.78, 0.82, 0.95), 3.0, rig),
           area("Visor_Kick", coll, (0.3, -2.0, 1.75), (0, 0, 1.69), 4, (0.6, 0.75, 1.0), 0.5, rig)]
     if char is not None:
         for ob in lk:
@@ -279,9 +279,10 @@ def mat_dock(name="Dock_Concrete_Wet"):
     cr = nb.noise(obj, 4.0, 12, 0.75, distortion=0.6)
     crack = nb.ramp(cr.outputs["Fac"], [(0.49, 0.0), (0.5, 1.0), (0.51, 0.0)])
     col = nb.mix(nb.math("MULTIPLY", crack, 0.8), col, (0.008, 0.008, 0.009))
-    wet = nb.ramp(nb.noise(obj, 0.35, 5, 0.55).outputs["Fac"], [(0.40, 0.0), (0.50, 1.0)])  # mostly wet
+    wet = nb.ramp(nb.noise(obj, 0.35, 5, 0.55).outputs["Fac"], [(0.44, 0.0), (0.54, 1.0)])  # mostly wet, dry islands
     col = nb.mix(nb.math("MULTIPLY", wet, 0.6), col, (0.010, 0.011, 0.013))
-    rough = nb.mixf(wet, 0.55, 0.035)
+    ripple = nb.noise(obj, 3.0, 4, 0.6)
+    rough = nb.mixf(wet, 0.55, nb.math("ADD", 0.05, nb.math("MULTIPLY", ripple.outputs["Fac"], 0.10)))
     grit = nb.noise(obj, 80.0, 6, 0.7)
     h = nb.math("ADD", nb.math("MULTIPLY", grit.outputs["Fac"], 0.3),
                 nb.math("ADD", nb.math("MULTIPLY", br.outputs["Fac"], -0.6), nb.math("MULTIPLY", crack, -0.4)))
@@ -300,16 +301,18 @@ def mat_sea(name="Harbour_Water"):
     nb = NB(m)
     tc = nb.texcoord()
     obj = tc.outputs["Object"]
-    w1 = nb.noise(nb.mapping(obj, (0.6, 1.4, 1.0)), 1.2, 6, 0.6)
-    w2 = nb.noise(obj, 9.0, 4, 0.5)
-    h = nb.math("ADD", w1.outputs["Fac"], nb.math("MULTIPLY", w2.outputs["Fac"], 0.3))
-    p = nb.principled(Base_Color=(0.004, 0.006, 0.010), Roughness=0.06, IOR=1.33,
-                      Normal=nb.bump(h, 0.5, 0.3))
+    w1 = nb.noise(nb.mapping(obj, (0.25, 0.7, 1.0)), 0.5, 6, 0.6)      # long swells
+    w2 = nb.noise(nb.mapping(obj, (1.0, 2.2, 1.0)), 1.6, 5, 0.6)       # chop
+    w3 = nb.noise(obj, 9.0, 3, 0.5)
+    h = nb.math("ADD", nb.math("ADD", w1.outputs["Fac"], nb.math("MULTIPLY", w2.outputs["Fac"], 0.5)),
+                nb.math("MULTIPLY", w3.outputs["Fac"], 0.15))
+    p = nb.principled(Base_Color=(0.004, 0.006, 0.009), Roughness=0.10, IOR=1.33,
+                      Normal=nb.bump(h, 1.0, 0.12))
     nb.output(p.outputs[0])
     return m
 
 
-def fog_wrap(mat, fog_col=(0.11, 0.13, 0.19), near=12.0, scale=160.0, max_fac=0.85, top=60.0):
+def fog_wrap(mat, fog_col=(0.11, 0.13, 0.19), near=12.0, scale=240.0, max_fac=0.62, top=60.0):
     """Aerial perspective: exponential distance haze toward a cool blue-grey, thinner with height."""
     nt = mat.node_tree
     out = [n for n in nt.nodes if n.type == "OUTPUT_MATERIAL"][0]
@@ -468,7 +471,8 @@ def build_environment(sc):
     deck_grey = fog_wrap(mat_hull("Warship_Superstructure", base=(0.075, 0.082, 0.090), rust=0.1))
     dark_boat = fog_wrap(mat_hull("Patrol_Boat_Dark", base=(0.020, 0.022, 0.026), rough=0.5))
     sub_black = fog_wrap(mat_hull("Submarine_Anechoic", base=(0.010, 0.011, 0.012), rough=0.35, rust=0.0, metal=0.1))
-    heli_grey = fog_wrap(mat_hull("Helicopter_Grey", base=(0.12, 0.13, 0.14), rough=0.45, rust=0.0, metal=0.2))
+    heli_grey = fog_wrap(mat_hull("Helicopter_Grey", base=(0.30, 0.31, 0.32), rough=0.40, rust=0.0, metal=0.3),
+                         max_fac=0.35)
     rock = fog_wrap(L.mat_simple("Mountain_Rock", (0.050, 0.055, 0.065), rough=0.9, var_col=(0.09, 0.10, 0.11),
                                  var_scale=0.02, bump_scale=0.05, bump_str=0.6), scale=900.0, max_fac=0.92, top=400.0)
     lamp_mat = mat_emit("Floodlight_Glow", (0.85, 0.90, 1.0), 25.0)
@@ -483,10 +487,16 @@ def build_environment(sc):
                                closed_u=True), curb)
     put("Harbour_Sea", grid(lambda u, v, i, j: (v * math.cos(u), v * math.sin(u), WATER_Z), lin(0, TAU, 128),
                             lin(QUAY_R - 0.2, 4000.0, 36), closed_u=True), sea)
-    foam = put("Surf_Spray", grid(lambda u, v, i, j: ((QUAY_R + 0.3 + 6.0 * v) * math.cos(u),
-                                                      (QUAY_R + 0.3 + 6.0 * v) * math.sin(u),
-                                                      WATER_Z + 0.25 + 0.9 * (1 - v) ** 2 * (0.5 + 0.5 * math.sin(u * 37))),
-                                  lin(math.radians(60), math.radians(120), 200), lin(0, 1, 6)), mat_foam())
+    spray = MD()
+    for (g0, g1, amp) in ((-16.0, -5.0, 1.0), (6.0, 15.0, 0.7)):
+        def sf(u, v, i, j, g0=g0, g1=g1, amp=amp):
+            g = lerp(g0, g1, u)
+            r = QUAY_R + 0.4 + 2.5 * v
+            crest = (0.5 + 0.5 * math.sin(u * 23.0 + 1.3) * math.sin(u * 9.0)) * amp
+            p = at(g, r, 0.0)
+            return V((p.x, p.y, WATER_Z + 0.2 + (1.9 * crest + 0.3) * (1 - v) ** 1.5))
+        spray.add(grid(sf, lin(0, 1, 120), lin(0, 1, 5)))
+    foam = put("Surf_Spray", spray, mat_foam())
     foam.visible_shadow = False
 
     # ------------------------------------------------------------------ submarine (far left, bow toward the camera)
@@ -500,14 +510,14 @@ def build_environment(sc):
         ln = 4.5 * (1 - 0.2 * v)
         x = w * math.copysign(abs(sa) ** 0.5, sa)
         y = ln * math.copysign(abs(ca) ** 0.8, ca) - (1.2 if ca < 0 else 0) * abs(ca)
-        return V((x, y, 8.0 + 6.0 * v))
+        return V((x, y, 8.0 + 4.2 * v))
     sail.add(grid(sl, lin(0, TAU, 28), lin(0, 1, 6), closed_u=True, pole_v1=True))
     for k, (dy, h) in enumerate(((1.6, 4.0), (0.4, 5.5), (-0.6, 3.0), (-1.6, 4.5))):
-        sail.add(L.tube([V((0, dy, 13.5)), V((0, dy, 13.5 + h))], 0.18 - 0.02 * k, 8))
+        sail.add(L.tube([V((0, dy, 11.8)), V((0, dy, 11.8 + h * 0.45))], 0.18 - 0.02 * k, 8))
     sail.add(L.box(5.5, 0.6, 0.15).translate((0, 2.0, 11.0)))  # sail planes
     sub.add(hull)
     sub.add(sail)
-    m = Matrix.Translation(at(-13.5, 85.0, WATER_Z - 5.8)) @ Matrix.Rotation(math.radians(180 - 13.5 - 38), 4, "Z")
+    m = Matrix.Translation(at(-13.5, 85.0, WATER_Z - 4.2)) @ Matrix.Rotation(math.radians(-(180 - 13.5 - 38)), 4, "Z")
     put("Submarine", sub.transform(m), sub_black)
 
     # ------------------------------------------------------------------ patrol boat (behind the FRONT/LEFT seam)
@@ -539,6 +549,15 @@ def build_environment(sc):
         ws.add(L.tube([V((6.8, -40 + k * 9.0, 9.0)), V((6.8, -40 + k * 9.0, 10.2))], 0.05, 4))
     m = Matrix.Translation(at(9.5, 170.0, WATER_Z - 3.0)) @ Matrix.Rotation(math.radians(-72), 4, "Z")
     put("Warship", ws.transform(m.copy()), hull_grey, smooth_=False)
+    # deck and window lights on the warship and the patrol boat
+    dots = MD()
+    for (x, y, z) in ((6.2, -14.0, 9.6), (6.2, -6.0, 9.6), (6.2, 2.0, 9.6), (5.1, -6.0, 12.0), (4.0, -4.0, 14.5),
+                      (0.0, -4.0, 24.2), (6.2, 20.0, 9.8), (6.2, 27.0, 9.8), (-6.2, -10.0, 9.6), (5.0, 12.0, 10.4)):
+        dots.add(L.uv_sphere(0.22, 8, 5).translate(m @ V((x, y, z))))
+    mp = Matrix.Translation(at(-3.4, 125.0, WATER_Z - 1.5)) @ Matrix.Rotation(math.radians(180 - 3.4 + 12), 4, "Z")
+    for (x, y, z) in ((0.0, -1.0, 6.4), (1.5, -1.0, 6.4), (-1.5, -1.0, 6.4), (0.0, -2.2, 16.0), (2.6, 3.0, 4.0)):
+        dots.add(L.uv_sphere(0.18, 8, 5).translate(mp @ V((x, y, z))))
+    put("Ship_Lights", dots, mat_emit("Ship_Light_Glow", (1.0, 0.92, 0.80), 30.0))
     # tall lattice mast / crane in front of the warship, under the helicopter
     crane = MD()
     base = at(3.6, 130.0, 0.0)

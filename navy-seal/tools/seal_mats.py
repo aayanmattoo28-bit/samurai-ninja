@@ -50,7 +50,7 @@ def _wet(nb, obj, scale=1.6, lo=0.45, hi=0.62):
     return nb.ramp(w.outputs["Fac"], [(lo, 0.0), (hi, 1.0)])
 
 
-def mat_suit(name="Suit_Drysuit_Black", base=(0.011, 0.011, 0.013), line=(0.060, 0.062, 0.068),
+def mat_suit(name="Suit_Drysuit_Black", base=(0.010, 0.011, 0.014), line=(0.105, 0.100, 0.112),
              blot=(0.020, 0.020, 0.023), tiles=1.25):
     """Black drysuit / combat suit: printed swirl linework camo, nylon weave, wet sheen in patches."""
     m = new_mat(name)
@@ -67,7 +67,8 @@ def mat_suit(name="Suit_Drysuit_Black", base=(0.011, 0.011, 0.013), line=(0.060,
     col = nb.mix(nb.math("MULTIPLY", wet, 0.35), col, (0.006, 0.006, 0.007))
     ao = _ao(nb, 0.04)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.002, 0.002, 0.0025))
-    rough = nb.mixf(wet, 0.55, 0.26)
+    rough = nb.mixf(wet, 0.48, 0.24)
+    rough = nb.mixf(nb.math("MULTIPLY", lines, 0.8), rough, 0.30)  # the raised piping is glossier
     # weave + fine crinkle of coated nylon
     wv = nb.n("ShaderNodeTexWave", (-900, -600), wave_type="BANDS", bands_direction="DIAGONAL")
     wv.inputs["Scale"].default_value = 260.0
@@ -200,16 +201,16 @@ def mat_metal(name="Metal_Gunmetal", base=(0.055, 0.056, 0.060), rough=0.38, edg
     return m
 
 
-def mat_visor(name="Visor_Blue", tint=(0.02, 0.20, 0.85), glow=0.22):
+def mat_visor(name="Visor_Blue", tint=(0.012, 0.078, 0.254), glow=0.4):
     """Blue mirrored / tinted dive-mask lens: strong glossy reflection, faint internal blue glow."""
     m = new_mat(name)
     nb = NB(m)
     tc = nb.texcoord()
     lw = nb.n("ShaderNodeLayerWeight", (-600, -200))
     lw.inputs["Blend"].default_value = 0.35
-    col = nb.mix(lw.outputs["Facing"], tint, (0.25, 0.55, 1.0))
-    p = nb.principled(Base_Color=col, Metallic=0.35, Roughness=0.05, Coat_Weight=1.0, Coat_Roughness=0.02,
-                      Emission_Color=tint, Emission_Strength=glow)
+    col = nb.mix(lw.outputs["Facing"], tint, (0.10, 0.32, 0.75))
+    p = nb.principled(Base_Color=col, Metallic=0.5, Roughness=0.04, Coat_Weight=1.0, Coat_Roughness=0.02,
+                      Emission_Color=(0.01, 0.06, 0.25), Emission_Strength=glow)
     nb.output(p.outputs[0])
     m.diffuse_color = (*tint, 1)
     return m
@@ -274,12 +275,12 @@ def build_materials():
     M["screen"] = mat_screen()
     M["patch_flag"] = mat_patch()
     M["helmet"] = mat_polymer("Helmet_Shell_Cover", base=(0.026, 0.027, 0.030), rough=0.55, grain=900.0)
-    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.016, 0.016, 0.017), blot1=(0.034, 0.033, 0.031),
-                                     blot2=(0.080, 0.074, 0.070))
-    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.026, 0.023, 0.019), blot1=(0.050, 0.044, 0.037),
-                                    blot2=(0.117, 0.101, 0.088))
-    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.009, 0.010, 0.013), blot1=(0.022, 0.024, 0.028),
-                                    blot2=(0.040, 0.045, 0.051))
+    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.022, 0.022, 0.023), blot1=(0.050, 0.048, 0.044),
+                                     blot2=(0.105, 0.098, 0.090))
+    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.033, 0.029, 0.024), blot1=(0.065, 0.057, 0.048),
+                                    blot2=(0.140, 0.122, 0.105))
+    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.013, 0.014, 0.017), blot1=(0.030, 0.033, 0.038),
+                                    blot2=(0.060, 0.065, 0.072))
     M["carrier"] = mat_nylon("Carrier_Cordura", base=(0.008, 0.008, 0.009), light=(0.022, 0.021, 0.020), tiles=16.0)
     M["webbing"] = mat_nylon("Webbing_MOLLE", base=(0.012, 0.012, 0.013), light=(0.030, 0.028, 0.026), tiles=24.0)
     M["plastic_light"] = mat_polymer("Plastic_Light_Grey", base=(0.16, 0.15, 0.14), rough=0.45, grain=900.0)
@@ -299,6 +300,9 @@ def build_materials():
     M["rope"] = L.mat_rope("Rope_Coyote_Tan")
     M["kneecap"] = mat_polymer("Kneepad_Cap_Gloss", base=(0.016, 0.017, 0.019), rough=0.20, coat=0.6, grain=900.0)
     M["midsole"] = mat_polymer("Boot_Midsole_Grey", base=(0.068, 0.072, 0.078), rough=0.5, grain=700.0)
+    M["gun_metal"] = mat_metal("Gun_Cerakote_Black", base=(0.020, 0.021, 0.023), rough=0.42, edge_col=(0.16, 0.16, 0.17))
+    M["gun_polymer"] = mat_polymer("Gun_Polymer_Black", base=(0.015, 0.015, 0.016), rough=0.45, grain=1400.0)
+    M["gun_rail"] = mat_metal("Gun_Rail_Maritime", base=(0.030, 0.031, 0.033), rough=0.36, edge_col=(0.22, 0.22, 0.23))
     M["glove"] = mat_polymer("Glove_Leather_Neoprene", base=(0.0044, 0.0052, 0.0065), rough=0.35, coat=0.45,
                              grain=1500.0)
     M["armour_gloss"] = mat_polymer("Armour_Hard_Gloss", base=(0.0103, 0.0116, 0.0144), rough=0.25, coat=0.5)
