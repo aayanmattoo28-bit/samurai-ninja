@@ -46,7 +46,7 @@ def leg_t_at_z(path, z):
 def leg_frame(side, z, u, extra=0.0):
     path = B.leg_path(side)
     t = leg_t_at_z(path, z)
-    p = B.limb_pt(path, B.leg_radius, t, u, extra)
+    p = B.limb_pt(path, lambda t_, u_: B.leg_radius(t_, u_, side), t, u, extra)
     c, T, N, Bv = B.limb_frame(path, t)
     n = p - c
     n = (n - T * n.dot(T)).normalized()
@@ -60,10 +60,12 @@ def outside_u(side):
     return -side * math.pi / 2
 
 
-def leg_strap(side, z_out, z_in, width, off=0.006, u_in=None):
-    """Strap ring around the thigh, sloping from z_out at the outside to z_in at the front-inner buckle."""
+def leg_strap(side, z_out, z_in, width, off=0.006, u_in=None, u_out=None):
+    """Strap ring around the leg, sloping from z_out at u_out (default the outside) to z_in opposite; buckle at u_in
+    (default front-inner)."""
     path = B.leg_path(side)
-    u_out = outside_u(side)
+    rad = lambda t_, u_: B.leg_radius(t_, u_, side)  # noqa: E731
+    u_out = outside_u(side) if u_out is None else u_out
     u_in = u_in if u_in is not None else side * math.radians(35)
     zm = (z_out + z_in) / 2
     t = leg_t_at_z(path, zm)
@@ -72,10 +74,10 @@ def leg_strap(side, z_out, z_in, width, off=0.006, u_in=None):
     for a in lin(0, TAU, 48)[:-1]:
         f = 0.5 - 0.5 * math.cos(a - u_out)  # 0 at the outside, 1 opposite
         dz = (z_out - zm) * (1 - 2 * smooth(f))
-        q = B.limb_pt(path, B.leg_radius, t, a, off) + V((0, 0, dz))
+        q = B.limb_pt(path, rad, t, a, off) + V((0, 0, dz))
         pts.append(q)
     md = sweep(pts, rect_profile(width, 0.003), closed_path=True, up=lambda i, p, c=c: (p - c))   # width along the leg
-    buckle_p = B.limb_pt(path, B.leg_radius, t, u_in, off + 0.004) + V((0, 0, (z_in - zm)))
+    buckle_p = B.limb_pt(path, rad, t, u_in, off + 0.004) + V((0, 0, (z_in - zm)))
     return md, buckle_p, (buckle_p - c).normalized()
 
 
@@ -137,9 +139,48 @@ def rope_hank(c, length, width, seed=0, loops=6):
 
 
 # ------------------------------------------------------------------------------------------------- boots
-BOOT = [(-0.078, 0.034, 0.090), (-0.060, 0.041, 0.100), (-0.030, 0.045, 0.110), (0.000, 0.046, 0.118),
-        (0.030, 0.050, 0.112), (0.060, 0.054, 0.104), (0.100, 0.0575, 0.090), (0.140, 0.057, 0.080),
-        (0.170, 0.053, 0.074), (0.195, 0.045, 0.062), (0.212, 0.032, 0.048), (0.222, 0.012, 0.036)]
+# Foot-local frame (foot_axes): s along the foot (0 under the ankle, + toward the toe), l lateral (+ outward), z up.
+# BOOT rows: (s, footprint half-width, crown height of the upper); boot_w() rounds the heel and the toe off in plan.
+BOOT = [(-0.0735, 0.0420, 0.080), (-0.064, 0.0420, 0.095), (-0.050, 0.0420, 0.108), (-0.025, 0.0425, 0.121),
+        (0.000, 0.0435, 0.131), (0.020, 0.0450, 0.138), (0.045, 0.0480, 0.129), (0.070, 0.0515, 0.117),
+        (0.095, 0.0550, 0.104), (0.125, 0.0575, 0.094), (0.150, 0.0580, 0.0835), (0.172, 0.0570, 0.0745),
+        (0.192, 0.0560, 0.0670), (0.204, 0.0550, 0.0590), (0.2115, 0.0545, 0.0500), (0.2165, 0.0540, 0.042)]
+BOOT_CL = [(-0.0735, 0.000), (-0.030, 0.001), (0.030, 0.004), (0.100, 0.002), (0.160, -0.003), (0.2165, -0.008)]
+# outer shaft, horizontal sections around the shin axis: z, half-depth, half-width (the 0.25 top opening, inner
+# ~0.085 x 0.075, takes the end of the bloused trouser leg)
+BOOT_SHAFT = [(0.095, 0.068, 0.056), (0.130, 0.069, 0.057), (0.160, 0.073, 0.062), (0.190, 0.079, 0.068),
+              (0.220, 0.086, 0.076), (0.250, 0.091, 0.081)]
+BOOT_TOP = 0.250
+# welt (top of the grey midsole) along the foot: heel block, waist, forefoot, toe spring
+BOOT_WELT = [(-0.085, 0.0385), (-0.040, 0.0385), (-0.015, 0.0370), (0.030, 0.0320), (0.080, 0.0275),
+             (0.130, 0.0260), (0.170, 0.0262), (0.200, 0.0285), (0.215, 0.0315), (0.235, 0.0370)]
+_BOOTS = {}
+
+
+def _sm(t):
+    import numpy as np
+    t = np.clip(t, 0.0, 1.0)
+    return t * t * (3 - 2 * t)
+
+
+def _pchip(table, x, col=1):
+    """Monotone cubic (Fritsch-Carlson) interpolation through a sorted table column; numpy in / out, clamped."""
+    import numpy as np
+    xs = np.array([q[0] for q in table], float)
+    ys = np.array([q[col] for q in table], float)
+    h = np.diff(xs)
+    d = np.diff(ys) / h
+    m = np.empty_like(ys)
+    m[0], m[-1] = d[0], d[-1]
+    w1, w2 = 2 * h[1:] + h[:-1], h[1:] + 2 * h[:-1]
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mm = (w1 + w2) / (w1 / d[:-1] + w2 / d[1:])
+    m[1:-1] = np.where(d[:-1] * d[1:] > 0, mm, 0.0)
+    x = np.clip(np.asarray(x, float), xs[0], xs[-1])
+    k = np.clip(np.searchsorted(xs, x) - 1, 0, len(xs) - 2)
+    t = (x - xs[k]) / h[k]
+    return ((1 + 2 * t) * (1 - t) ** 2 * ys[k] + t * (1 - t) ** 2 * h[k] * m[k] + t * t * (3 - 2 * t) * ys[k + 1] +
+            t * t * (t - 1) * h[k] * m[k + 1])
 
 
 def foot_axes(side):
@@ -151,109 +192,400 @@ def foot_axes(side):
 
 
 def sole_z(s):
-    """Top of the outsole along the foot (heel block thicker, toe spring)."""
-    return interp_smooth([(-0.08, 0.036), (-0.03, 0.035), (0.03, 0.026), (0.10, 0.023), (0.18, 0.024), (0.225, 0.032)],
-                         s)[0]
+    """Welt height (top of the midsole stripe) along the foot; works on floats and numpy arrays."""
+    z = _pchip(BOOT_WELT, s)
+    return float(z) if z.ndim == 0 else z
+
+
+def sole_bot(s):
+    """Underside of the outsole: toe spring, the waist lifted behind a square heel breast, rounded heel strike."""
+    import numpy as np
+    s = np.asarray(s, float)
+    z = (0.014 * _sm((s - 0.150) / 0.075) ** 1.6 + 0.006 * _sm((s + 0.020) / 0.005) * _sm((0.080 - s) / 0.050) +
+         0.004 * _sm((-0.068 - s) / 0.012))
+    return float(z) if z.ndim == 0 else z
+
+
+def boot_w(s):
+    """Footprint half-width: BOOT column with a round heel cup and a blunt rounded toe."""
+    import numpy as np
+    s = np.asarray(s, float)
+    s0, s1 = BOOT[0][0], BOOT[-1][0]
+    hc = np.clip((-0.035 - s) / (-0.035 - s0), 0, 1)
+    tc = np.clip((s - 0.145) / (s1 - 0.145), 0, 1)
+    w = _pchip(BOOT, s) * np.sqrt(1 - hc ** 2) * (1 - tc ** 2.4) ** (1 / 2.4)
+    return np.where((s < s0) | (s > s1), 0.0, w)
+
+
+def _boot_field(side):
+    """Implicit field of the upper in foot-local coordinates (< 0 inside, ~metres): a crowned last over the footprint
+    smoothly united with an elliptical shaft that follows the shin (its front turned half way to the leg's), and the
+    ankle-bone swellings (lateral malleolus lower and further back)."""
+    import numpy as np
+    a, fwd, rt = foot_axes(side)
+    shin = sorted((((p - a).dot(fwd), (p - a).dot(rt), p.z) for p in B.leg_path(side) if p.z < 0.45),
+                  key=lambda q: q[2])
+    zsh = np.array([q[2] for q in shin])
+    css, cls = np.array([q[0] for q in shin]), np.array([q[1] for q in shin])
+    psi = 0.5 * B.TOE_OUT
+    cp, sp = math.cos(psi), math.sin(psi)
+
+    def centre(z):
+        return np.interp(z, zsh, css), np.interp(z, zsh, cls)
+
+    def field(s, l, z):
+        z0 = sole_z(s)
+        cl = _pchip(BOOT_CL, s)
+        t = np.clip((z - z0) / np.maximum(_pchip(BOOT, s, 2) - z0, 1e-4), 0, None)
+        w = boot_w(s)
+        u = np.abs(l - cl) / np.maximum(w, 1e-6)
+        fd = np.where(w > 1e-6, ((u ** 2.4 + t ** 2.6) ** (1 / 2.4) - 1) * 0.05, 0.05)
+        cs, cc = centre(z)
+        ds, dl = s - cs, l - cc
+        d1, d2 = ds * cp - dl * sp, ds * sp + dl * cp
+        e = (d1 / _pchip(BOOT_SHAFT, z)) ** 2 + (d2 / _pchip(BOOT_SHAFT, z, 2)) ** 2 + \
+            np.clip((0.095 - z) / 0.040, 0, None) ** 2
+        fs = (np.sqrt(e) - 1) * 0.065
+        k = 0.030  # generous blend: the tongue fills the instep crease, the ankle stays full
+        hh = np.clip(0.5 + 0.5 * (fs - fd) / k, 0, 1)
+        f = fs + (fd - fs) * hh - k * hh * (1 - hh)
+        f -= 0.0040 * np.exp(-((s + 0.010) ** 2 + (z - 0.088) ** 2) / 0.016 ** 2) * _sm((l - cc) / 0.02)
+        f -= 0.0035 * np.exp(-((s - 0.004) ** 2 + (z - 0.100) ** 2) / 0.016 ** 2) * _sm((cc - l) / 0.02)
+        return f
+
+    return field, centre
+
+
+def _boot_upper(side, nu=72, nk=60):
+    """Upper as a stack of near-horizontal slices of the field (z blends from the welt line to the flat top), spaced
+    evenly along the front and back profiles; each slice is sampled by rays from its centre."""
+    import numpy as np
+    field, centre = _boot_field(side)
+    lam = np.linspace(0.0, 1.0, 361)
+    ss = np.linspace(-0.10, 0.26, 721)
+    S, LAM = np.meshgrid(ss, lam)
+
+    def zof(s, lm):
+        return sole_z(s) * (1 - lm) + BOOT_TOP * lm
+
+    def lline(s, z):
+        return _pchip(BOOT_CL, s) * (1 - _sm((z - 0.09) / 0.07)) + centre(z)[1] * _sm((z - 0.09) / 0.07)
+
+    Z = zof(S, LAM)
+    f = field(S, lline(S, Z), Z)
+    ins = f < 0
+    i0 = np.argmax(ins, axis=1)
+    i1 = ins.shape[1] - 1 - np.argmax(ins[:, ::-1], axis=1)
+    rows = np.arange(len(lam))
+    fb0, fb1 = f[rows, i0 - 1], f[rows, i0]
+    sb = ss[i0 - 1] + (ss[i0] - ss[i0 - 1]) * fb0 / (fb0 - fb1)
+    ff0, ff1 = f[rows, i1], f[rows, i1 + 1]
+    sf = ss[i1] + (ss[i1 + 1] - ss[i1]) * ff0 / (ff0 - ff1)
+    zf, zb = zof(sf, lam), zof(sb, lam)
+    dl = 0.5 * (np.hypot(np.diff(sf), np.diff(zf)) + np.hypot(np.diff(sb), np.diff(zb))) + 0.05 * np.diff(lam)
+    cum = np.concatenate([[0.0], np.cumsum(dl)])
+    lams = np.interp(np.linspace(0, cum[-1], nk + 1), cum, lam)
+    phi = np.arange(nu) * TAU / nu
+    grid_pts = []
+    for lm in lams:
+        b_, f_ = np.interp(lm, lam, sb), np.interp(lm, lam, sf)
+        sc = 0.5 * (b_ + f_)
+        zc = zof(sc, lm)
+        ls = np.linspace(-0.16, 0.16, 641)
+        fl = field(np.full_like(ls, sc), ls, np.full_like(ls, zc))
+        li = np.nonzero(fl < 0)[0]
+        lo, hi = ls[li[0]], ls[li[-1]]
+        lc, rl, rs = 0.5 * (lo + hi), 0.5 * (hi - lo), 0.5 * (f_ - b_)
+        dv = np.stack([rs * np.cos(phi), rl * np.sin(phi)])
+        dv /= np.linalg.norm(dv, axis=0)
+        r = np.linspace(0.0, 1.6 * max(rs, rl) + 0.01, 700)
+        Sq = sc + r[:, None] * dv[0][None, :]
+        Lq = lc + r[:, None] * dv[1][None, :]
+        Zq = zof(Sq, lm)
+        fq = field(Sq, Lq, Zq)
+        j1 = np.maximum(np.argmax(fq >= 0, axis=0), 1)
+        cols = np.arange(nu)
+        g0, g1 = fq[j1 - 1, cols], fq[j1, cols]
+        fr = g0 / (g0 - g1)
+        rr = r[j1 - 1] + (r[j1] - r[j1 - 1]) * fr
+        sq, lq = sc + rr * dv[0], lc + rr * dv[1]
+        grid_pts.append(list(zip(sq, lq, zof(sq, lm))))
+    return grid_pts, field, centre
+
+
+def _boot_data(side):
+    """Cached upper of one boot: world-space grid rows (welt -> top), BVH for surface lookups, foot frame."""
+    if side in _BOOTS:
+        return _BOOTS[side]
+    from mathutils.bvhtree import BVHTree
+    a, fwd, rt = foot_axes(side)
+    loc, _, centre = _boot_upper(side)
+    rows = [[a + fwd * s + rt * l + V((0, 0, z)) for s, l, z in row] for row in loc]
+    nu = len(rows[0])
+    verts = [p for row in rows for p in row]
+    polys = [(j * nu + i, j * nu + (i + 1) % nu, (j + 1) * nu + (i + 1) % nu, (j + 1) * nu + i)
+             for j in range(len(rows) - 1) for i in range(nu)]
+    verts.append(sum(rows[0], V()) / nu)  # insole cap so that low rays always hit
+    polys += [(i, len(verts) - 1, (i + 1) % nu) for i in range(nu)]
+    d = {"a": a, "fwd": fwd, "rt": rt, "rows": rows, "loc": loc, "bvh": BVHTree.FromPolygons(verts, polys),
+         "centre": centre}
+    _BOOTS[side] = d
+    return d
+
+
+def _boot_hit(side, o, d, off=0.0):
+    """Ray from an interior point o along d to the upper; returns (point + normal * off, outward normal)."""
+    bd = _boot_data(side)
+    d = V(d).normalized()
+    p, n, _, _ = bd["bvh"].ray_cast(V(o), d)
+    if p is None:
+        return V(o) + d * 0.04, d
+    n = V(n).normalized()
+    if n.dot(d) < 0:
+        n = -n
+    return p + n * off, n
+
+
+def boot_loc(side, s, l, z):
+    a, fwd, rt = foot_axes(side)
+    return a + fwd * s + rt * l + V((0, 0, z))
 
 
 def boot_pt(side, s, a_, off=0.0):
-    a, fwd, rt = foot_axes(side)
-    w = interp_smooth([(q[0], q[1]) for q in BOOT], s)[0] + off
-    h = interp_smooth([(q[0], q[2]) for q in BOOT], s)[0] + off
-    z0 = sole_z(s)
-    ca, sa = math.cos(a_), math.sin(a_)
-    lx = math.copysign(abs(ca) ** (2.0 / 2.6), ca) * w
-    lz = (math.copysign(abs(sa) ** (2.0 / 2.4), sa) * 0.5 + 0.5)
-    return a + fwd * s + rt * lx + V((0, 0, z0 + lz * (h - z0)))
+    """Point on the upper over foot station s; a_ = 0 lateral, pi/2 top, pi medial (rays from just above the welt)."""
+    bd = _boot_data(side)
+    o = boot_loc(side, s, float(_pchip(BOOT_CL, s)), sole_z(s) + 0.012)
+    return _boot_hit(side, o, bd["rt"] * math.cos(a_) + V((0, 0, math.sin(a_))), off)[0]
 
 
-def build_boot(side, boots, soles, mids, laces, metal, trim):
-    a, fwd, rt = foot_axes(side)
-    ss = lin(-0.078, 0.222, 34)
-    boots.add(grid(lambda u, v, i, j: boot_pt(side, v, u), lin(-math.pi / 2, 3 * math.pi / 2, 30), ss, closed_u=True))
-    # shaft along the lower leg up to z 0.215 (hidden under the bloused cuff above ~0.205)
-    path = B.leg_path(side)
-    t0 = leg_t_at_z(path, 0.225)
-    sub = [B.limb_frame(path, lerp(t0, 1.0, k / 10))[0] for k in range(11)]
-    sub[-1] = sub[-1] + V((0, 0, -0.035))
+def shaft_hit(side, z, u, off=0.0):
+    """Shaft lookup at height z: u = 0 front (turned with the shaft), pi/2 lateral, pi back."""
+    bd = _boot_data(side)
+    cs, cl = bd["centre"](z)
+    psi = 0.5 * B.TOE_OUT
+    e1 = bd["fwd"] * math.cos(psi) - bd["rt"] * math.sin(psi)
+    e2 = bd["fwd"] * math.sin(psi) + bd["rt"] * math.cos(psi)
+    return _boot_hit(side, boot_loc(side, float(cs), float(cl), z), e1 * math.cos(u) + e2 * math.sin(u), off)
 
-    def shaft_r(t, u):
-        a_, b_ = lerp(0.065, 0.0625, t), lerp(0.055, 0.050, t)  # half-depth, half-width
-        cu, su = math.cos(u), math.sin(u)
-        return a_ * b_ / math.sqrt((b_ * cu) ** 2 + (a_ * su) ** 2) + 0.002 * math.sin(u * 5 + t * 7)
 
-    boots.add(L.limb(sub, shaft_r, 30))
-    # padded collar + ankle strap with an outer buckle + heel ribs
-    c0 = sub[0]
-    trim.add(L.limb([c0 + V((0, 0, 0.010)), c0 + V((0, 0, -0.012))], lambda t, u: shaft_r(0.0, u) + 0.004, 30))
-    ts = leg_t_at_z(path, 0.150)
-    c1, T1, N1, B1 = B.limb_frame(path, min(1.0, ts))
-    ring = [c1 + (N1 * math.cos(u) + B1 * math.sin(u)) * (shaft_r(0.6, u) + 0.003) for u in lin(0, TAU, 33)[:-1]]
-    trim.add(sweep(ring, rect_profile(0.020, 0.003), closed_path=True, up=lambda i, p, c=c1: p - c))
-    outv = V((side, 0.0, 0.0))
-    ladder_buckle(metal, c1 + outv * 0.056, outv, w=0.025, h=0.020)
-    for k in range(4):
-        zz = 0.060 + k * 0.012
-        heel = [a - fwd * 0.070 + rt * (0.040 * math.sin(t_)) + fwd * (0.012 * (1 - math.cos(t_))) + V((0, 0, zz))
-                for t_ in lin(-1.2, 1.2, 10)]
-        trim.add(tube(heel, 0.0025, 6))
-    # outsole (offset footprint), heel block, grey midsole stripe, side lugs, toe bumper
-    outline = []
-    for q in range(56):
-        ang = TAU * q / 56
-        s = lerp(-0.083, 0.226, 0.5 - 0.5 * math.cos(ang))
-        w = interp_smooth([(p[0], p[1]) for p in BOOT], max(-0.078, min(0.222, s)))[0] + 0.004
-        frac = math.sin(ang)
-        outline.append((s, w * (1 if frac >= 0 else -1) * min(1.0, abs(frac) * 2.5)))
-    base = [a + fwd * s + rt * w for s, w in outline]
-    n = len(base)
-    for z0f, z1f, mdx, grow in ((lambda s: 0.0, lambda s: sole_z(s) - 0.004, soles, 0.0),
-                                (lambda s: sole_z(s) - 0.004, lambda s: sole_z(s), mids, 0.001)):
-        top = [p + (p - (a + fwd * 0.07)).normalized() * grow + V((0, 0, z1f(s))) for p, (s, w) in zip(base, outline)]
-        bot = [p + (p - (a + fwd * 0.07)).normalized() * grow + V((0, 0, z0f(s))) for p, (s, w) in zip(base, outline)]
-        b0 = len(mdx.v)
-        mdx.v.extend(top + bot)
-        for k in range(n):
-            k2 = (k + 1) % n
-            mdx.f.append((b0 + k, b0 + k2, b0 + n + k2, b0 + n + k))
-            mdx.uv.append([(k / n, 1), ((k + 1) / n, 1), ((k + 1) / n, 0), (k / n, 0)])
-            mdx.mi.append(0)
-        cb = len(mdx.v)
-        mdx.v.append(sum(bot, V()) / n)
-        for k in range(n):
-            mdx.f.append((b0 + n + ((k + 1) % n), b0 + n + k, cb))
-            mdx.uv.append([(0, 0), (1, 0), (0.5, 0.5)])
-            mdx.mi.append(0)
-    for k, (s, w) in enumerate(outline):  # side lugs: chunky blocks around the rim at the bottom
-        if k % 2:
+def build_boot(side, md):
+    """One boot: lofted upper (smooth vamp, grained quilted shaft, flex creases), glossy toe cap, mudguard and ribbed
+    heel counter, lace stays with eyelets and speed hooks, criss-cross laces, ankle strap with buckle, diagonal
+    stabilisers, back stay, padded collar, lugged outsole with a grey midsole stripe."""
+    import numpy as np
+    bd = _boot_data(side)
+    a, fwd, rt, rows = bd["a"], bd["fwd"], bd["rt"], bd["rows"]
+    up = V((0, 0, 1))
+    nu = len(rows[0])
+    upper = grid(lambda u, v, i, j: rows[j][i % nu], list(range(nu + 1)), list(range(len(rows))), closed_u=True,
+                 flip=side < 0)
+    loc = bd["loc"]
+    for j in range(len(rows) - 1):  # smooth wet leather below the stabiliser line, grained leather shaft above it
+        for i in range(nu):
+            q = [loc[j][i], loc[j][(i + 1) % nu], loc[j + 1][(i + 1) % nu], loc[j + 1][i]]
+            s, z = sum(c[0] for c in q) / 4, sum(c[2] for c in q) / 4
+            upper.mi[j * nu + i] = int(z > 0.104 + (s - 0.058) * 0.49)
+    md["upper"].add(upper)
+    # mudguard rand round the foot between the toe cap and the heel counter: the lowest slices pushed out
+    nrm = []
+    for j in range(len(loc)):
+        row = []
+        for i in range(nu):
+            du = V(loc[j][(i + 1) % nu]) - V(loc[j][i - 1])
+            dv = V(loc[min(j + 1, len(loc) - 1)][i]) - V(loc[max(j - 1, 0)][i])
+            n = du.cross(dv).normalized()
+            row.append((fwd * n.x + rt * n.y + up * n.z).normalized())
+        nrm.append(row)
+    jm = max(j for j in range(len(loc)) if max(c[2] - sole_z(c[0]) for c in loc[j]) < 0.019)
+    keep = lambda i, j: -0.012 < loc[j][i][0] < 0.168 and -0.012 < loc[j][(i + 1) % nu][0] < 0.168  # noqa: E731
+    md["gloss"].add(grid(lambda u, v, i, j: rows[j][i % nu] + nrm[j][i % nu] * (0.0010 if j else 0.0004),
+                         list(range(nu + 1)), list(range(jm + 1)), keep=keep, flip=side < 0))
+
+    # glossy toe cap: rays fanned forward from inside the toe box, back edge arched over the vamp
+    o_toe = boot_loc(side, 0.158, float(_pchip(BOOT_CL, 0.158)), sole_z(0.158) + 0.016)
+
+    def toe(u, v, i, j):
+        bmax = math.radians(70 + 18 * math.sin(L.clamp(u, 0, math.pi)))
+        b = v * bmax
+        d = fwd * math.cos(b) + (rt * math.cos(u) + up * math.sin(u)) * math.sin(b)
+        return _boot_hit(side, o_toe, d, 0.0012)[0]
+
+    md["gloss"].add(grid(toe, lin(-0.22, math.pi + 0.22, 26), lin(0, 1, 10), pole_v0=True, flip=side > 0))
+
+    for k, s in enumerate((0.117, 0.128)):  # flex creases on the vamp sides behind the toe cap
+        for a0, a1 in ((0.32, 1.02), (math.pi - 1.02, math.pi - 0.32)):
+            pts = [boot_pt(side, s + 0.004 * math.sin(3.0 * u + k), u, -0.0007) for u in lin(a0, a1, 9)]
+            md["upper"].add(tube(pts, 0.0015, 6))
+
+    # heel counter: horizontal rays around the heel, top edge high at the back and sweeping down to the welt
+    z0h = sole_z(-0.040)
+    fm = math.pi / 2 + 0.15
+
+    def ztop(ph):
+        return z0h + 0.012 + (0.100 - z0h - 0.012) * (1 - min(1.0, abs(ph) / fm) ** 2.2)
+
+    def heel(u, v, i, j):
+        z = lerp(z0h + 0.0015, ztop(u), v)
+        o = boot_loc(side, -0.020, float(_pchip(BOOT_CL, -0.020)), z)
+        return _boot_hit(side, o, -fwd * math.cos(u) + rt * math.sin(u), 0.0015)[0]
+
+    md["gloss"].add(grid(heel, lin(-fm, fm, 24), lin(0, 1, 8), flip=side > 0))
+    for k in range(4):  # moulded ribs on the outer heel
+        z = 0.050 + 0.0095 * k
+        phs = [ph for ph in lin(0.20, 1.35, 14) if ztop(ph) > z + 0.006]
+        if len(phs) < 3:
             continue
-        p = a + fwd * s + rt * w
-        out = (p - (a + fwd * 0.07)).normalized()
-        soles.add(box(0.014, 0.010, 0.012).transform(look_matrix(p + out * 0.003 + V((0, 0, 0.008)), out, (0, 0, 1))))
-    trim.add(grid(lambda u, v, i, j: boot_pt(side, lerp(0.165, 0.224, v), u, 0.0015), lin(-math.pi / 2, math.pi / 2, 16),
-                  lin(0, 1, 6)))   # glossy toe cap
-    # laces: 9 crossings from the vamp up the shaft front, eyelets low, speed hooks high
-    lp, rp_ = [], []
-    for k in range(9):
-        if k < 5:
-            s = lerp(0.112, 0.020, k / 4)
-            pl, pr = boot_pt(side, s, math.pi / 2 - 0.45, 0.003), boot_pt(side, s, math.pi / 2 + 0.45, 0.003)
-        else:
-            tt = lerp(1.0, t0, (k - 4) / 4.5)
-            cc, Tt, Nt, Bt = B.limb_frame(path, tt)
-            pl = cc + (Nt * math.cos(0.42) + Bt * math.sin(0.42)) * 0.066
-            pr = cc + (Nt * math.cos(-0.42) + Bt * math.sin(-0.42)) * 0.066
-        lp.append(pl)
-        rp_.append(pr)
-        if k < 5:
-            for q in (pl, pr):
-                metal.add(torus_md(0.0035, 0.0012, 10, 4).transform(look_matrix(q, (q - a - V((0, 0, 0.05))).normalized())))
-        else:
-            for q in (pl, pr):
-                metal.add(box(0.008, 0.004, 0.006).translate(q))
-    for k in range(len(lp) - 1):
-        laces.add(sweep([lp[k], rp_[k + 1]], rect_profile(0.004, 0.0015), up=(0, -1, 0.3)))
-        laces.add(sweep([rp_[k], lp[k + 1]], rect_profile(0.004, 0.0015), up=(0, -1, 0.3)))
+        pts = [_boot_hit(side, boot_loc(side, -0.020, float(_pchip(BOOT_CL, -0.020)), z),
+                         -fwd * math.cos(ph) + rt * math.sin(ph), 0.0035)[0] for ph in phs]
+        md["gloss"].add(tube(pts, 0.0021, 6))
+
+    # lace line: a fan of rays from inside the ankle sweeping up from the lace start on the vamp, over the instep
+    # and up the shaft front (turned with the shaft), resampled evenly
+    psi = 0.5 * B.TOE_OUT
+    cs, cl = bd["centre"](0.240)
+    A = float(_pchip(BOOT_SHAFT, 0.240))
+    s0, l0, z0 = 0.146, float(_pchip(BOOT_CL, 0.146)), float(_pchip(BOOT, 0.146, 2))
+    s1, l1 = float(cs) + A * math.cos(psi), float(cl) - A * math.sin(psi)
+    o_l = boot_loc(side, 0.0, 0.0, 0.075)
+    th0, th1 = math.atan2(z0 - 0.075, math.hypot(s0, l0)), math.atan2(0.240 - 0.075, math.hypot(s1, l1))
+    az0, az1 = math.atan2(l0, s0), math.atan2(l1, s1)
+    fan = []
+    for f in lin(0, 1, 90):
+        th, az = lerp(th0, th1, f), lerp(az0, az1, f)
+        d = (fwd * math.cos(az) + rt * math.sin(az)) * math.cos(th) + up * math.sin(th)
+        fan.append(_boot_hit(side, o_l, d)[0])
+    line = [_boot_hit(side, o_l, q - o_l) for q in L.resample(fan, 64)]
+
+    def lace_frame(x):
+        """Centre point, normal, up-tangent and lateral (outward) direction at fraction x of the lace line."""
+        k = min(len(line) - 2, int(x * (len(line) - 1)))
+        f = x * (len(line) - 1) - k
+        p = line[k][0].lerp(line[k + 1][0], f)
+        n = line[k][1].lerp(line[k + 1][1], f).normalized()
+        t = (line[k + 1][0] - line[k][0]).normalized()
+        lat = t.cross(n).normalized()
+        return p, n, t, (lat if lat.dot(rt) > 0 else -lat)
+
+    def lace_hit(x, q, off):
+        """Project q onto the upper by a ray from below the lace line at x."""
+        p, n, t, lat = lace_frame(x)
+        return _boot_hit(side, p - n * 0.035, q - (p - n * 0.035), off)
+
+    def lace_side(x, sgn, off):
+        p, _, _, lat = lace_frame(x)
+        hw = lerp(0.0190, 0.0250, smooth((x - 0.25) / 0.5)) * math.sin(math.pi / 2 * min(1.0, x / 0.05))
+        return lace_hit(x, p + lat * (sgn * hw), off)
+
+    # lace stays (eyelet facings) meeting in a U at the throat
+    xs = lin(1.0, 0.0, 34) + lin(0.0, 1.0, 34)[1:]
+    pts = [lace_side(x, -1 if k < 35 else 1, 0.0022) for k, x in enumerate(xs)]
+    md["trim"].add(sweep([p for p, n in pts], rect_profile(0.0145, 0.0016, 2), up=lambda i, p, pts=pts: pts[i][1]))
+    rowx = [0.060 + 0.905 * k / 8 for k in range(9)]
+    row_pts = [(lace_side(x, 1, 0.0042)[0], lace_side(x, -1, 0.0042)[0]) for x in rowx]
+    for k, (pl, pr) in enumerate(row_pts):
+        _, _, t, lat = lace_frame(rowx[k])
+        for q, sgn in ((pl, 1), (pr, -1)):
+            nq = lace_side(rowx[k], sgn, 0.0)[1]
+            if k < 5:
+                md["metal"].add(torus_md(0.0034, 0.0011, 12, 5).transform(look_matrix(q, nq, t)))
+            else:  # speed hook: rivet plus a J hook opening upward
+                md["metal"].add(torus_md(0.0026, 0.0012, 10, 4).transform(look_matrix(q, nq, t)))
+                o_ = lat * (sgn * 0.0012)
+                md["metal"].add(tube([q, q + nq * 0.0040 + o_, q + nq * 0.0056 + t * 0.0018 + o_,
+                                      q + nq * 0.0048 + t * 0.0040 + o_], 0.0012, 6))
+
+    def lace(p0, p1, x0, x1, extra):
+        pts = [lace_hit(lerp(x0, x1, f), p0.lerp(p1, f), 0.0035 + extra * math.sin(math.pi * f)) for f in lin(0, 1, 7)]
+        md["lace"].add(sweep([p for p, n in pts], rect_profile(0.0050, 0.0018, 1), up=lambda i, p, pts=pts: pts[i][1]))
+
+    lace(row_pts[0][0], row_pts[0][1], rowx[0], rowx[0], 0.0012)  # criss-cross, strands at two heights
+    for k in range(8):
+        lace(row_pts[k][0], row_pts[k + 1][1], rowx[k], rowx[k + 1], 0.0016)
+        lace(row_pts[k][1], row_pts[k + 1][0], rowx[k], rowx[k + 1], 0.0027)
+
+    # ankle strap round the back from lace stay to lace stay, ladder buckle on the outer side
+    uu = lin(0.50, TAU - 0.50, 40)
+    pts = [shaft_hit(side, 0.150, u, 0.0030) for u in uu]
+    md["trim"].add(sweep([p for p, n in pts], rect_profile(0.020, 0.0026, 2), up=lambda i, p, pts=pts: pts[i][1]))
+    bp, bn = shaft_hit(side, 0.150, math.pi / 2 + 0.25, 0.0050)
+    ladder_buckle(md["metal"], bp, bn, w=0.022, h=0.024)
+
+    for z in (0.178, 0.198, 0.218):  # padded quarters: quilting ridges round the shaft between the lace stays
+        pts = [shaft_hit(side, z, u, -0.0002)[0] for u in lin(0.58, TAU - 0.58, 36)]
+        md["upper"].add(tube(pts, 0.0022, 6))
+    # back stay up the heel and shaft, padded collar roll
+    pts = [shaft_hit(side, z, math.pi, 0.0020) for z in lin(0.088, 0.244, 16)]
+    md["trim"].add(sweep([p for p, n in pts], rect_profile(0.016, 0.0018, 2), up=lambda i, p, pts=pts: pts[i][1]))
+    top = rows[-1]
+    ct = sum(top, V()) / nu
+    ring = [p + (V((p.x - ct.x, p.y - ct.y, 0)).normalized() * 0.0012) - up * 0.0070 for p in top]
+    md["pad"].add(sweep(ring, L.circle_profile(0.0095, 12, rx=0.0058), closed_path=True, up=(0, 0, 1)))
+
+    # diagonal stabilisers from the lace stay down to the heel counter and the waist, a piping line above
+    for sgn in (1, -1):
+        def side_hit(s, z, off, sgn=sgn):
+            cs, cl = bd["centre"](z)
+            w = smooth((z - 0.09) / 0.07)
+            o = boot_loc(side, s, float(_pchip(BOOT_CL, s)) * (1 - w) + float(cl) * w, z)
+            return _boot_hit(side, o, rt * sgn, off)
+
+        pts = [side_hit(lerp(0.080, -0.040, f), lerp(0.115, 0.056, f), 0.0024) for f in lin(0, 1, 16)]
+        md["trim"].add(sweep([p for p, n in pts], rect_profile(0.017, 0.0018, 2), up=lambda i, p, pts=pts: pts[i][1]))
+        pts = [side_hit(lerp(0.050, -0.030, f), lerp(0.128, 0.084, f), 0.0016)[0] for f in lin(0, 1, 12)]
+        md["trim"].add(tube(pts, 0.0014, 6))
+        pts = [side_hit(lerp(0.095, 0.035, f), lerp(0.094, 0.050, f), 0.0022) for f in lin(0, 1, 10)]
+        md["trim"].add(sweep([p for p, n in pts], rect_profile(0.013, 0.0016, 2), up=lambda i, p, pts=pts: pts[i][1]))
+
+    # outsole: welt outline offset outward, lugged side wall, toe spring and lifted waist; grey midsole stripe on top
+    loc0 = bd["loc"][0]
+    ring2 = L.resample(catmull_path([V((s, l, 0)) for s, l, z in loc0], 3, closed=True), 192, closed=True)
+    n2 = len(ring2)
+    per = [0.0]
+    for p0, p1 in zip(ring2, ring2[1:] + ring2[:1]):
+        per.append(per[-1] + (p1 - p0).length)
+    ring_s = np.array([p.x for p in ring2])
+    z0s, zbs = sole_z(ring_s), sole_bot(ring_s)
+    outs = []
+    for k in range(n2):
+        t = ring2[(k + 1) % n2] - ring2[k - 1]
+        nn = V((t.y, -t.x, 0)).normalized()
+        if nn.dot(ring2[k] - V((0.07, 0.0, 0))) < 0:
+            nn = -nn
+        outs.append(nn)
+    lug = [float(_sm((0.5 + 0.5 * math.cos(TAU * per[k] / 0.030) - 0.28) / 0.30)) for k in range(n2)]
+
+    def ring_rows(spec, mdx, fan=None):
+        b0 = len(mdx.v)
+        for zf, of in spec:
+            for k in range(n2):
+                q = ring2[k] + outs[k] * of(k)
+                mdx.v.append(boot_loc(side, q.x, q.y, zf(k)))
+        nr = len(spec)
+        for r in range(nr - 1):
+            for k in range(n2):
+                k2 = (k + 1) % n2
+                f = (b0 + r * n2 + k, b0 + r * n2 + k2, b0 + (r + 1) * n2 + k2, b0 + (r + 1) * n2 + k)
+                mdx.f.append(f[::-1] if side > 0 else f)
+                u0, u1, v0, v1 = k / n2, (k + 1) / n2, r / nr, (r + 1) / nr
+                mdx.uv.append([(u0, v0), (u1, v0), (u1, v1), (u0, v1)])
+                mdx.mi.append(0)
+        if fan is not None:
+            c = len(mdx.v)
+            mdx.v.append(boot_loc(side, 0.07, 0.0, fan))
+            last = b0 + (nr - 1) * n2
+            for k in range(n2):
+                f = (last + k, last + (k + 1) % n2, c)
+                mdx.f.append(f if side < 0 else f[::-1])
+                mdx.uv.append([(0, 0), (1, 0), (0.5, 0.5)])
+                mdx.mi.append(0)
+
+    ring_rows([(lambda k: z0s[k] + 0.0010, lambda k: 0.0008), (lambda k: z0s[k], lambda k: 0.0044),
+               (lambda k: z0s[k] - 0.0046, lambda k: 0.0046), (lambda k: z0s[k] - 0.0056, lambda k: 0.0030)], md["mid"])
+    zr = lambda k, f: zbs[k] + f * (z0s[k] - 0.0075 - zbs[k])  # noqa: E731
+    ring_rows([(lambda k: z0s[k] - 0.0042, lambda k: 0.0040), (lambda k: z0s[k] - 0.0075, lambda k: 0.0062),
+               (lambda k: zr(k, 0.60), lambda k: 0.0062 + 0.0030 * lug[k]),
+               (lambda k: zbs[k] + 0.0035, lambda k: 0.0062 + 0.0036 * lug[k]),
+               (lambda k: zbs[k], lambda k: 0.0040 + 0.0030 * lug[k])], md["sole"], fan=float(sole_bot(0.07)))
 
 
 # ------------------------------------------------------------------------------------------------- build
@@ -410,25 +742,36 @@ def build(coll, root):
     ropes.add(uv_sphere(0.008, 10, 6).translate((-0.150, 0.172, 0.852)))
 
     # ------------------------------------------------------------------ pockets: thigh cargo, shin, slim calf (+ knife)
+    rig_straps = {1: ((0.815, 0.800), (0.725, 0.720)), -1: ((0.840, 0.820), (0.760, 0.720))}  # drop-leg straps above
+
+    def strap_press(side, z, uu):
+        """1 under a drop-leg leg strap (the straps pinch the cargo pockets flat), 0 away from them."""
+        p = 0.0
+        for z_out, z_in in rig_straps[side]:
+            zs = z_out + (z_in - z_out) * smooth(0.5 - 0.5 * math.cos(uu - outside_u(side)))
+            p = max(p, math.exp(-((z - zs) / 0.018) ** 2))
+        return p
+
     for side in (1, -1):
-        def cargo(u, v, i, j, side=side):
-            z = lerp(0.710, 0.850, v)
-            uu = -side * math.radians(30) + side * lerp(-0.42, 0.42, u)
-            bul = (1 - (2 * u - 1) ** 4) * (1 - (2 * v - 1) ** 4)
-            return leg_frame(side, z, uu, 0.004 + 0.016 * bul)[0]
+        def cargo(u, v, i, j, side=side, lift=0.0):
+            z = lerp(0.705, 0.845, v)
+            uu = -side * math.radians(30) + side * lerp(-0.40, 0.40, u)
+            bul = max(0.0, 1 - abs(2 * u - 1) ** 6) * max(0.0, 1 - abs(2 * v - 1) ** 6)
+            return leg_frame(side, z, uu, 0.003 + 0.014 * bul * (1 - 0.85 * strap_press(side, z, uu)) + lift)[0]
 
-        pockets.add(grid(cargo, lin(0, 1, 10), lin(0, 1, 10)))
-        pockets.add(grid(lambda u, v, i, j, side=side: leg_frame(side, lerp(0.815, 0.855, v),
-                                                                 -side * math.radians(30) + side * lerp(-0.44, 0.44, u),
-                                                                 0.022)[0], lin(0, 1, 10), lin(0, 1, 3)))
+        pockets.add(grid(cargo, lin(0, 1, 12), lin(0, 1, 14)))
+        pockets.add(grid(lambda u, v, i, j, side=side: cargo(lerp(-0.03, 1.03, u), lerp(0.74, 1.0, v), 0, 0, side,
+                                                             0.004), lin(0, 1, 12), lin(0, 1, 4)))  # wider top flap
 
-        def shin(u, v, i, j, side=side):
-            z = lerp(0.240, 0.390 - 0.015 * math.sin(math.pi * u), v)
-            uu = -side * math.radians(28) + side * lerp(-0.55, 0.55, u)
-            bul = (1 - (2 * u - 1) ** 4) * (1 - (2 * v - 1) ** 4)
-            return leg_frame(side, z, uu, 0.004 + 0.012 * bul)[0]
+        def shin(u, v, i, j, side=side, lift=0.0):
+            z = lerp(0.300, 0.388 - 0.013 * math.sin(math.pi * min(1.0, max(0.0, u))), v)
+            uu = -side * math.radians(22) + side * lerp(-0.60, 0.60, u)
+            bul = max(0.0, 1 - abs(2 * u - 1) ** 5) * max(0.0, 1 - abs(2 * v - 1) ** 5)
+            return leg_frame(side, z, uu, 0.003 + 0.010 * bul + lift)[0]
 
-        pockets.add(grid(shin, lin(0, 1, 10), lin(0, 1, 10)))
+        pockets.add(grid(shin, lin(0, 1, 12), lin(0, 1, 10)))
+        pockets.add(grid(lambda u, v, i, j, side=side: shin(lerp(-0.03, 1.03, u), lerp(0.70, 1.0, v), 0, 0, side,
+                                                            0.004), lin(0, 1, 12), lin(0, 1, 4)))   # curved top flap
         p, x, n, zv, t = leg_frame(side, 0.400, outside_u(side) - side * 0.35, 0.004)
         sm = frame(p, n, zv)
         so = [(0.0175, 0.060), (-0.0175, 0.060), (-0.014, -0.060), (0.014, -0.060)]
@@ -437,42 +780,62 @@ def build(coll, root):
         if side < 0:  # the dive knife (seal_weapons) sits in the right sheath, handle up
             GEAR_FRAMES["knife"] = (p + n * 0.011, n, zv)
 
-    # ------------------------------------------------------------------ knee pads: vented cap on a backing pad
+    # ------------------------------------------------------------------ knee pads: articulated hard shell on a backing
     for side in (1, -1):
         path = B.leg_path(side)
-        tk = leg_t_at_z(path, 0.495)
-        dt = 0.090 / L.path_length(path)
+        tk = leg_t_at_z(path, 0.497)
+        t_up, t_dn = tk - leg_t_at_z(path, 0.587), leg_t_at_z(path, 0.405) - tk
 
-        def cap(u, v, i, j, path=path, tk=tk, off0=0.010, amp=0.030, grow=0.0):
-            top = (1 - v) / 2  # v = -1 top .. 1 bottom
-            half = lerp(0.52, 0.60, top) + grow
-            r = min(1.0, (abs(u) ** 3 + abs(v) ** 3) ** (1 / 3))
-            bulge = amp * (1 - r * r) ** 0.6 + off0
-            return B.limb_pt(path, B.leg_radius, tk + v * dt * (1 + grow), u * half, bulge)
+        def kp(s, h, off, wid=1.0, side=side, path=path, tk=tk, t_up=t_up, t_dn=t_dn):
+            """Point on the pad: s = -1..1 across, h = -1 (top edge) .. 1 (bottom tip) on a shield outline, wide at the
+            top and rounded below; off = height over the smooth (fold-free) trouser surface."""
+            h = h - 0.30 * s * s * smooth((h - 0.1) / 0.9) + 0.10 * s * s * smooth((-h - 0.5) / 0.5)
+            u = s * wid * lerp(0.92, 0.66, smooth((h + 1) / 2))
+            t = tk + h * (t_dn if h > 0 else t_up)
+            c, T, N, Bv = B.limb_frame(path, t)
+            return c + (N * math.cos(u) + Bv * math.sin(u)) * (B.leg_base(t, u, side) + off)
 
-        keep = lambda i, j: (abs(i - 9) / 9.0) ** 3 + (abs(j - 10) / 10.0) ** 3 <= 1.12  # noqa: E731
-        kp_caps.add(grid(cap, lin(-1, 1, 18), lin(-1, 1, 20), keep=keep))
-        kp_back.add(grid(lambda u, v, i, j, path=path, tk=tk: B.limb_pt(path, B.leg_radius, tk + v * dt * 1.12,
-                                                                        u * 0.68, 0.006),
-                         lin(-1, 1, 14), lin(-1, 1, 16)))
-        rim = [cap(math.cos(a) * 0.97, math.sin(a) * 0.97, 0, 0) for a in lin(0, TAU, 48)[:-1]]
-        kp_caps.add(tube(rim, 0.003, 6, closed=True))
-        for k in range(5):  # vent slots in a recessed band near the top
-            q = cap((k - 2) * 0.22, -0.62, 0, 0)
-            n = (q - B.limb_frame(path, tk - 0.62 * dt)[0]).normalized()
-            rivets.add(box(0.004, 0.012, 0.003).transform(look_matrix(q, n, (0, 0, 1))))
-        for k in (-1, 0, 1):  # rivets on the backing's lower edge
-            q = B.limb_pt(path, B.leg_radius, tk + 1.08 * dt, k * 0.45, 0.012)
+        def dome(s, h):  # the top edge tucks under the trouser roll so the shell reads convex in profile
+            return lerp(0.008, 0.020, smooth((h + 1) / 0.5)) + 0.036 * max(0.0, 1 - s * s) ** 0.55 * \
+                max(0.0, 1 - ((h + 0.05) / 0.95) ** 2) ** 0.6
+
+        def lower(s, h):  # lower articulated plate: tucked under the dome, its tip curling onto the backing
+            return 0.024 + 0.013 * max(0.0, 1 - s * s) ** 0.55 * (1 - smooth((h - 0.5) / 0.5))
+
+        kp_caps.add(grid(lambda s, h, i, j: kp(s, h, dome(s, h)), lin(-1, 1, 18), lin(-1.0, 0.62, 22)))
+        kp_caps.add(grid(lambda s, h, i, j: kp(s, h, lower(s, h), 0.95), lin(-1, 1, 14), lin(0.50, 1.0, 8)))
+        kp_caps.add(grid(lambda s, h, i, j: kp(s, h, dome(s, h) + 0.003), lin(-0.55, 0.55, 10), lin(-0.92, -0.74, 3)))
+        rim = [kp(s, -1.0, dome(s, -1.0) + 0.0015) for s in lin(-1, 1, 14)[:-1]]
+        rim += [kp(1.0, h, dome(1.0, h) + 0.0015) for h in lin(-1.0, 0.62, 14)[:-1]]
+        rim += [kp(s, 0.62, dome(s, 0.62) + 0.0015) for s in lin(1, -1, 14)[:-1]]
+        rim += [kp(-1.0, h, dome(-1.0, h) + 0.0015) for h in lin(0.62, -1.0, 14)[:-1]]
+        kp_caps.add(tube(rim, 0.0032, 6, closed=True))                     # raised rim bead round the dome
+        kp_caps.add(tube([kp(s, 1.0, lower(s, 1.0) + 0.001, 0.95) for s in lin(-1, 1, 14)], 0.002, 5))
+        kp_caps.add(tube([kp(s, h, dome(0.8 * s, h) + 0.001, 0.80) for s, h in          # inner raised contour
+                          [(-1, 0.45)] + [(-1, h) for h in lin(0.3, -0.62, 8)] + [(s, -0.70) for s in lin(-0.8, 0.8, 9)]
+                          + [(1, h) for h in lin(-0.62, 0.3, 8)] + [(1, 0.45)]], 0.0018, 5))
+        kp_back.add(grid(lambda s, h, i, j: kp(s, h, lerp(0.006, 0.019, smooth((h + 1.1) / 0.6)) + 0.002 * (1 - s * s),
+                                                1.24), lin(-1, 1, 16),
+                         lin(-1.10, 1.25, 22)))
+        c0 = B.limb_frame(path, tk)[0]
+        for k in range(5):  # vent slots in the raised band below the top rim
+            q = kp((k - 2) * 0.2, -0.83, dome((k - 2) * 0.2, -0.83) + 0.0045)
+            rivets.add(box(0.0045, 0.010, 0.003).transform(look_matrix(q, (q - c0).normalized(), (0, 0, 1))))
+        for s, h in ((-0.35, 1.17), (0.0, 1.19), (0.35, 1.17), (-0.96, -0.6), (0.96, -0.6), (-0.96, 0.3), (0.96, 0.3)):
+            q = kp(s, h, 0.0215, 1.24)                                      # rivets on the backing's rim
             rivets.add(uv_sphere(0.0025, 8, 5).translate(q))
-        md, bpnt, bn = leg_strap(side, 0.550, 0.550, 0.025, off=0.004, u_in=outside_u(side) - side * 2.2)
-        straps.add(md)
+        md, bpnt, bn = leg_strap(side, 0.550, 0.550, 0.025, off=0.006, u_in=outside_u(side) - side * 0.65)
+        straps.add(md)                                                    # upper strap behind the knee, outer buckle
         ladder_buckle(buckles, bpnt, bn, w=0.030, h=0.020)
-        md, bpnt, bn = leg_strap(side, 0.470, 0.430, 0.022, off=0.004)
-        straps.add(md)
+        md, bpnt, bn = leg_strap(side, 0.435, 0.515, 0.022, off=0.006, u_out=0.0)
+        straps.add(md)                                                    # lower strap rising from the cap to the back
 
     # ------------------------------------------------------------------ boots
+    bmd = {"upper": boots, "sole": soles, "mid": mids, "lace": laces, "metal": bmetal, "trim": btrim, "gloss": MD(),
+           "pad": MD()}
+    _BOOTS.clear()  # the uppers follow the current leg path / ankle
     for side in (1, -1):
-        build_boot(side, boots, soles, mids, laces, bmetal, btrim)
+        build_boot(side, bmd)
 
     # ------------------------------------------------------------------ objects
     ob = to_obj("Battle_Belt", belt, M["belt"], coll, parent=root)
@@ -504,12 +867,19 @@ def build(coll, root):
     mod_solidify(ob, 0.012, -1.0)
     mod_subsurf(ob, 1, 1)
     to_obj("Knee_Pad_Vents_Rivets", rivets, M["metal"], coll, parent=root)
-    ob = to_obj("Boots", boots, M["boot"], coll, parent=root)
+    import seal_mats as MT
+    wet = MT.mat_polymer("Boot_Leather_Wet", base=(0.011, 0.011, 0.0125), rough=0.36, coat=0.30, grain=700.0)
+    ob = to_obj("Boots", boots, [wet, M["boot"]], coll, parent=root)
     mod_subsurf(ob, 1, 2)
+    ob = to_obj("Boot_ToeCaps_HeelCounters", bmd["gloss"], M["kneecap"], coll, parent=root)
+    mod_solidify(ob, 0.0016, -1.0)
+    mod_subsurf(ob, 1, 1)
     ob = to_obj("Boot_Outsoles_Lugs", soles, M["rubber_sole"], coll, parent=root, smooth=False)
-    mod_bevel(ob, 0.002, 2)
-    to_obj("Boot_Midsole_Stripe", mids, M["midsole"], coll, parent=root, smooth=False)
+    mod_bevel(ob, 0.0012, 2)
+    ob = to_obj("Boot_Midsole_Stripe", mids, M["midsole"], coll, parent=root, smooth=False)
+    mod_bevel(ob, 0.0008, 1)
     to_obj("Boot_Laces", laces, M["webbing"], coll, parent=root)
     to_obj("Boot_Eyelets_Hooks_Buckles", bmetal, M["metal"], coll, parent=root)
-    ob = to_obj("Boot_Collar_Strap_ToeCap", btrim, M["boot"], coll, parent=root)
-    mod_solidify(ob, 0.002, 1.0)
+    to_obj("Boot_Stays_Straps_Overlays", btrim, wet, coll, parent=root)
+    ob = to_obj("Boot_Padded_Collars", bmd["pad"], M["boot"], coll, parent=root)
+    mod_subsurf(ob, 1, 1)

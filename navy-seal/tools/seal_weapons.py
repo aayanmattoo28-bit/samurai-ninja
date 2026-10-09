@@ -372,17 +372,23 @@ def gear_mats():
 
 
 def in_hand_frame():
-    """FRONT-view carry: the carbine hangs muzzle-down beside the right leg, its pistol grip through the right fist
-    (grip along the fist's knuckle line), stock up at the hip, scope side facing forward."""
+    """FRONT-view carry: the carbine hangs muzzle-down beside the right leg, its pistol grip in the right fist
+    (seal_body.GRIP_FIST: grip centre and axis in the hand frame), the right side panel against the palm.  The fist is
+    pronated and ulnar-deviated, so the rifle hangs in profile: right side to the camera, magazine and grip pointing
+    out, rail and optic toward the thigh, muzzle a little forward."""
     import seal_body as B
-    hm = B.hand_matrix(-1)
-    fist = hm @ V((-0.030, 0.0, -0.112))
-    xl = V((-0.10, -0.12, -0.99)).normalized()                     # bore: down, a touch outward and forward
-    zl = V((0.0, -1.0, 0.0))
-    zl = (zl - xl * zl.dot(xl)).normalized()                        # scope side forward
-    yl = zl.cross(xl).normalized()                                  # its left side toward the leg
+    hm = B.hand_matrix(-1, grip=True)
+    c, h = B.GRIP_FIST
+    rot = hm.to_3x3()
+    g = (rot @ h).normalized()                                       # grip axis, receiver -> grip bottom
+    yl = (rot @ V((-1.0, 0.0, 0.0))).normalized()                    # its left side away from the palm
+    yl = (yl - g * yl.dot(g)).normalized()
+    w = yl.cross(g)
+    sa, ca = math.sin(math.radians(26.5)), math.cos(math.radians(26.5))   # rake of the grip behind the bore normal
+    xl = -g * sa - w * ca                                            # bore toward the muzzle
+    zl = w * sa - g * ca                                             # scope side
     m = Matrix((xl, yl, zl)).transposed().to_4x4()
-    m.translation = fist - (xl * 0.022 - zl * 0.098)               # grip centre (0.022, 0, -0.098) in the fist
+    m.translation = hm @ c - xl * 0.022 + zl * 0.098                 # grip centre (0.022, 0, -0.098) in the fist
     return m
 
 
