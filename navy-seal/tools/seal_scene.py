@@ -133,7 +133,7 @@ def compositor(sc, calib=False):
         src = gl.outputs["Image"]
     cb = nt.nodes.new("CompositorNodeColorBalance")
     cb.correction_method = "LIFT_GAMMA_GAIN"
-    cb.lift = (0.985, 0.99, 1.02)
+    cb.lift = (0.992, 0.992, 1.003)              # near-neutral, deep blacks (the sheet's darks are neutral)
     cb.gamma = (1.0, 1.0, 1.0)
     cb.gain = (1.03, 1.0, 0.96)
     Lk(src, cb.inputs["Image"])
@@ -180,7 +180,7 @@ def world(sc):
                  (0.479, 0.386, 0.392))
     bg = nb.n("ShaderNodeBackground", (200, 0))
     nb.link(col, bg.inputs["Color"])
-    bg.inputs["Strength"].default_value = 0.55
+    bg.inputs["Strength"].default_value = 0.34       # low ambient: deep shadows, as on the sheet
     # the camera sees a plain dark studio grey; the dusk dome only lights and reflects on the character
     studio = nb.n("ShaderNodeBackground", (200, -200))
     studio.inputs["Color"].default_value = (0.020, 0.021, 0.024, 1)
@@ -212,10 +212,10 @@ def build_lights(sc):
     front-left, strong low peach rim from the sunset behind-right, blue sky rim behind-left."""
     coll = collection("Lighting")
     world(sc)
-    sun(coll, "Key_Front_Right", (0.53, -0.63, 0.57), 2.0, (0.888, 0.761, 0.658), 12)
-    sun(coll, "Fill_Moon_Front_Left", (-0.64, -0.64, 0.42), 0.4, (0.397, 0.503, 0.716), 30)
-    sun(coll, "Rim_Sunset_Back_Right", (0.75, 0.63, 0.21), 3.0, (0.930, 0.571, 0.371), 6)
-    sun(coll, "Rim_Sky_Back_Left", (-0.61, 0.61, 0.50), 2.0, (0.275, 0.397, 0.672), 10)
+    sun(coll, "Key_Front_Right", (0.53, -0.63, 0.57), 2.7, (0.888, 0.761, 0.658), 12)
+    sun(coll, "Fill_Moon_Front_Left", (-0.64, -0.64, 0.42), 0.35, (0.397, 0.503, 0.716), 30)
+    sun(coll, "Rim_Sunset_Back_Right", (0.75, 0.63, 0.21), 3.8, (0.930, 0.571, 0.371), 6)
+    sun(coll, "Rim_Sky_Back_Left", (-0.61, 0.61, 0.50), 2.8, (0.275, 0.397, 0.672), 10)
 
 
 # --- camera and the four views -----------------------------------------------------------------------------

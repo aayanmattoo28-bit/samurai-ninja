@@ -277,9 +277,10 @@ def mat_patch(name="Patch_Flag_Subdued", img="flag_subdued.png"):
 
 def build_materials():
     M.clear()
-    M["suit"] = mat_suit()
-    M["suit_legs"] = mat_suit("Suit_Trousers_Black", base=(0.0068, 0.0070, 0.0078), line=(0.052, 0.050, 0.054),
-                              blot=(0.013, 0.013, 0.015))
+    # the sheet's suit reads busy: pale linework clearly visible on sleeves and trousers at turnaround scale
+    M["suit"] = mat_suit(line=(0.150, 0.146, 0.150))
+    M["suit_legs"] = mat_suit("Suit_Trousers_Black", base=(0.0068, 0.0070, 0.0078), line=(0.105, 0.101, 0.106),
+                              blot=(0.015, 0.015, 0.017))
     M["suit_panel"] = mat_suit("Suit_Panel_Black", base=(0.009, 0.009, 0.010), line=(0.035, 0.036, 0.04), tiles=1.6)
     M["nylon"] = mat_nylon()
     M["nylon_dark"] = mat_nylon("Nylon_Webbing_Black", base=(0.010, 0.010, 0.011), light=(0.028, 0.028, 0.031),
