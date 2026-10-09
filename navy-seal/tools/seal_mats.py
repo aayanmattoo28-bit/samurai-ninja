@@ -287,6 +287,7 @@ def build_materials():
     M["polymer"] = mat_polymer()
     M["polymer_gloss"] = mat_polymer("Polymer_Gloss_Black", base=(0.014, 0.014, 0.016), rough=0.25, coat=0.4)
     M["rubber"] = mat_rubber()
+    M["rubber_matte"] = mat_rubber("Rubber_Bellows_Matte", base=(0.007, 0.007, 0.008), rough=0.48)
     M["metal"] = mat_metal()
     M["metal_black"] = mat_metal("Metal_Black_Cerakote", base=(0.022, 0.022, 0.024), rough=0.45,
                                  edge_col=(0.20, 0.20, 0.21))

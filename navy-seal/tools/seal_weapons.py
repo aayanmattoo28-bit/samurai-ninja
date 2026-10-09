@@ -61,7 +61,7 @@ def bx(x0, x1, z0, z1, w, y=0.0):
 # --------------------------------------------------------------------------------------------------------------
 def carbine_md():
     """Carbine prop in its own frame: +X along the bore to the front end, +Z toward the scope, +Y its left side;
-    origin on the bore line at the receiver's rear face.  0.90 m from butt pad to end cap.  {material key: MD}"""
+    origin on the bore line at the receiver's rear face.  0.90 m from butt pad to muzzle.  {material key: MD}"""
     P = {k: MD() for k in ("metal", "polymer", "rail", "cap", "glass", "lamp")}
     Mt, Po, R = P["metal"], P["polymer"], P["rail"]
     # skeletal stock: butt pad, cheek bar, diagonal lower strut, sling cup; short tube with a ring
@@ -121,42 +121,46 @@ def carbine_md():
     P["glass"].add(cyl_x(0.0605, 0.0615, 0.017, z=0.081))
     P["glass"].add(bx(0.120, 0.1215, 0.104, 0.122, 0.018))
 
-    # chunky square railed handguard (rails on all four faces) with a ring at its rear
+    # long free-float railed handguard (rails on all four faces) running almost to the muzzle, as the turnaround
+    # draws it in hand and slung, with a ring at its rear
+    HG0, HG1, HW, HH = 0.242, 0.585, 0.029, 0.034
+
     def hg(u, v, i, j):
-        x = lerp(0.242, 0.443, v)
+        x = lerp(HG0, HG1, v)
         ca, sa = math.cos(u), math.sin(u)
-        return V((x, 0.031 * math.copysign(abs(sa) ** 0.3, sa), -0.0025 + 0.0375 * math.copysign(abs(ca) ** 0.3, ca)))
+        return V((x, HW * math.copysign(abs(sa) ** 0.3, sa), -0.0025 + HH * math.copysign(abs(ca) ** 0.3, ca)))
     R.add(grid(hg, lin(0, TAU, 32), lin(0, 1, 2), closed_u=True))
-    R.add(bx(0.2425, 0.2426, -0.040, 0.035, 0.062))
-    R.add(bx(0.4425, 0.4430, -0.040, 0.035, 0.062))
-    Mt.add(cyl_x(0.242, 0.252, 0.035))
-    for k in range(20):
+    R.add(bx(HG0 + 0.0005, HG0 + 0.0006, -0.037, 0.032, 0.058))
+    R.add(bx(HG1 - 0.0006, HG1 - 0.0005, -0.037, 0.032, 0.058))
+    Mt.add(cyl_x(HG0, HG0 + 0.010, 0.033))
+    nrib = int((HG1 - 0.012 - 0.250) / 0.0098)
+    for k in range(nrib):
         xk = 0.250 + k * 0.0098
-        R.add(bx(xk, xk + 0.004, 0.035, 0.039, 0.022))                  # top
-        R.add(bx(xk, xk + 0.004, -0.044, -0.040, 0.022))                # bottom
+        R.add(bx(xk, xk + 0.004, HH - 0.0025, HH + 0.0015, 0.020))           # top
+        R.add(bx(xk, xk + 0.004, -HH - 0.0065, -HH - 0.0025, 0.020))         # bottom
         for s in (1, -1):
-            R.add(box(0.004, 0.004, 0.022).translate((xk + 0.002, s * 0.033, -0.0025)))
-    for k in range(5):                                                   # lightening slots between the rails
+            R.add(box(0.004, 0.004, 0.020).translate((xk + 0.002, s * (HW + 0.002), -0.0025)))
+    for k in range(9):                                                   # lightening slots between the rails
         for s in (1, -1):
-            Mt.add(box(0.022, 0.002, 0.008).translate((0.268 + k * 0.035, s * 0.0305, 0.020)))
+            Mt.add(box(0.022, 0.002, 0.008).translate((0.268 + k * 0.034, s * (HW - 0.0005), 0.018)))
     # slim vertical front grip with four finger grooves
     fg = [(0.0, 0.0)] + [(0.0175 - 0.003 * (0.5 + 0.5 * math.cos(TAU * t * 4)) * (t > 0.15), 0.111 * t)
                          for t in lin(0, 1, 33)] + [(0.0, 0.111)]
     Po.add(lathe(fg, 18).transform(Matrix.Translation((0.3365, 0.0, -0.040)) @ Matrix.Rotation(math.pi, 4, "X")))
-    # triangular front post block on the barrel, thin barrel section, small under-lamp, end cap with two rings
-    Mt.add(ext([(0.456, -0.011), (0.498, -0.011), (0.498, 0.012), (0.481, 0.066), (0.478, 0.075), (0.476, 0.075),
-                (0.473, 0.066), (0.456, 0.012)], 0.016))
-    Mt.add(cyl_x(0.443, 0.549, 0.008))
-    Mt.add(bx(0.474, 0.494, -0.026, -0.008, 0.010))
-    Mt.add(cyl_x(0.469, 0.536, 0.011, z=-0.035))
-    P["lamp"].add(cyl_x(0.5355, 0.5365, 0.0095, z=-0.035))
-    P["cap"].add(cyl_x(0, 0, 0, prof=[(0.0, 0.549), (0.018, 0.549), (0.018, 0.558), (0.016, 0.559), (0.016, 0.587),
-                                      (0.018, 0.588), (0.018, 0.603), (0.016, 0.604), (0.016, 0.648), (0.012, 0.654),
-                                      (0.0, 0.654)], n=28))
-    for k in range(8):                                                   # vent flutes on the end cap
+    # low folding front sight on the top rail, weapon light on the right-side rail, short barrel stub and a
+    # fluted flash-hider / can on the muzzle
+    Mt.add(ext([(0.556, HH + 0.0015), (0.580, HH + 0.0015), (0.580, HH + 0.010), (0.571, HH + 0.026),
+                (0.566, HH + 0.026), (0.560, HH + 0.010)], 0.014))
+    Mt.add(bx(0.506, 0.522, -0.012, 0.007, 0.010, y=-HW - 0.006))
+    Mt.add(cyl_x(0.495, 0.562, 0.011, y=-HW - 0.017, z=-0.0025))
+    P["lamp"].add(cyl_x(0.5615, 0.5625, 0.0095, y=-HW - 0.017, z=-0.0025))
+    Mt.add(cyl_x(HG1 - 0.002, 0.600, 0.0085))
+    P["cap"].add(cyl_x(0, 0, 0, prof=[(0.0, 0.600), (0.017, 0.600), (0.017, 0.607), (0.015, 0.608), (0.015, 0.640),
+                                      (0.017, 0.641), (0.017, 0.650), (0.013, 0.656), (0.0, 0.656)], n=28))
+    for k in range(8):                                                   # vent flutes on the muzzle device
         a = TAU * k / 8
-        P["cap"].add(box(0.036, 0.003, 0.0015).transform(Matrix.Translation((0.626, 0.0, 0.0)) @
-                                                         Matrix.Rotation(a, 4, "X") @ Matrix.Translation((0, 0, 0.016))))
+        P["cap"].add(box(0.026, 0.003, 0.0015).transform(Matrix.Translation((0.626, 0.0, 0.0)) @
+                                                         Matrix.Rotation(a, 4, "X") @ Matrix.Translation((0, 0, 0.015))))
     return P
 
 
@@ -345,11 +349,12 @@ def multitool_md():
 
 def gear_mats():
     g = {}
-    g["gun_metal"] = mat_metal("Carbine_Coating_Grey", base=(0.019, 0.020, 0.023), rough=0.48,
-                               edge_col=(0.102, 0.098, 0.089))
-    g["gun_polymer"] = mat_polymer("Carbine_Polymer_Black", base=(0.012, 0.012, 0.013), rough=0.58, grain=1400.0)
-    g["gun_rail"] = mat_metal("Carbine_Rail_Grey", base=(0.022, 0.023, 0.026), rough=0.42,
-                              edge_col=(0.16, 0.155, 0.145))
+    # satin coatings: the sheet's carbine catches the light along every rail tooth and edge
+    g["gun_metal"] = mat_metal("Carbine_Coating_Grey", base=(0.019, 0.020, 0.023), rough=0.32,
+                               edge_col=(0.20, 0.195, 0.18))
+    g["gun_polymer"] = mat_polymer("Carbine_Polymer_Black", base=(0.012, 0.012, 0.013), rough=0.42, grain=1400.0)
+    g["gun_rail"] = mat_metal("Carbine_Rail_Grey", base=(0.022, 0.023, 0.026), rough=0.28,
+                              edge_col=(0.30, 0.29, 0.27))
     g["gun_cap"] = mat_metal("Carbine_EndCap_Worn", base=(0.031, 0.024, 0.019), rough=0.45, edge_col=(0.17, 0.16, 0.13))
     g["strap"] = mat_nylon("Carry_Strap_Light_Grey", base=(0.060, 0.063, 0.068), light=(0.095, 0.098, 0.104),
                            tiles=26.0)

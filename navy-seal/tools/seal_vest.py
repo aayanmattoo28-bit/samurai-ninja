@@ -276,6 +276,31 @@ def build(coll, root):
         return V((x, back_y(x) + bul, z))
 
     bk.add(grid(case, lin(0, 1, 16), lin(0, 1, 14), flip=True))
+
+    def case_y(x, z):
+        u = (x + 0.090) / 0.160
+        zb = 1.330 - 0.015 * math.exp(-((x + 0.01) / 0.03) ** 2)
+        v = (z - zb) / (1.530 - zb)
+        return back_y(x) + 0.050 * (1 - 0.35 * (2 * u - 1) ** 4) * (1 - 0.3 * (2 * v - 1) ** 4)
+
+    # MOLLE rows over the case and the back bag either side of it, bar-tacked every channel (the sheet's back is
+    # webbing from the drag handle down), plus two compression straps down the case
+    for k in range(5):
+        zz = 1.362 + k * 0.0305
+        molle.add(sweep([V((x, case_y(x, zz) + 0.002, zz)) for x in lin(-0.084, 0.064, 14)], rect_profile(0.025, 0.003),
+                        up=(0, 1, 0)))
+        for x in lin(-0.076, 0.056, 5):
+            trims.add(box(0.004, 0.003, 0.025).translate((x, case_y(x, zz) + 0.0045, zz)))
+        for sg, xa, xb in ((-1, -0.098, -0.162), (1, 0.078, 0.162)):
+            molle.add(sweep([V((x, back_y(x) + 0.002, zz)) for x in lin(xa, xb, 6)][::sg], rect_profile(0.025, 0.003),
+                            up=(0, 1, 0)))
+            for x in lin(xa, xb, 3)[1:]:
+                trims.add(box(0.004, 0.003, 0.025).translate((x, back_y(x) + 0.0045, zz)))
+    for xs_ in (-0.055, 0.035):
+        molle.add(sweep([V((xs_, case_y(xs_, z) + 0.0065, z)) for z in lin(1.343, 1.522, 12)],
+                        rect_profile(0.025, 0.003), up=(0, 1, 0)))
+        hard.add(box(0.032, 0.006, 0.018).translate((xs_, case_y(xs_, 1.395) + 0.010, 1.395)))   # side-release buckle
+        hard.add(box(0.026, 0.004, 0.006).translate((xs_, case_y(xs_, 1.412) + 0.009, 1.412)))
     border = [V((x, back_y(x) + 0.032, 1.338 - 0.015 * math.exp(-((x + 0.01) / 0.03) ** 2))) for x in lin(-0.088, 0.068, 20)]
     hard.add(sweep(border, rect_profile(0.020, 0.003), up=(0, 1, 0)))
 

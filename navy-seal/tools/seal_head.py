@@ -361,17 +361,17 @@ def build(coll, root):
     # a vertical corrugated bellows collar wrapped round the back of the neck (horizontal ribs, as the BACK view
     # shows), domed into the helmet's rear edge, with short ribbed canisters at each side where the hose plugs in
     Mf = MANIFOLD
-    z0, z1, pitch = 1.556, 1.684, 0.0094
+    z0, z1, pitch = 1.572, 1.684, 0.0094
 
     def bell(u, v, i, j):
         z = lerp(z0, z1, v)
-        rib = 0.0042 * (0.5 + 0.5 * math.cos(TAU * (z - z0) / pitch)) ** 1.5
+        rib = 0.0032 * (0.5 + 0.5 * math.cos(TAU * (z - z0) / pitch)) ** 1.5
         dome = math.sqrt(max(0.0, 1 - max(0.0, (z - 1.655) / 0.031) ** 2))
-        flare = 1.0 + 0.10 * smooth((1.585 - z) / 0.03)
-        rx, ry = (0.108 * flare * (0.55 + 0.45 * dome) + rib), (0.060 * flare * (0.6 + 0.4 * dome) + rib)
+        flare = 1.0 + 0.10 * smooth((1.600 - z) / 0.03)
+        rx, ry = (0.100 * flare * (0.55 + 0.45 * dome) + rib), (0.060 * flare * (0.6 + 0.4 * dome) + rib)
         return V((rx * math.sin(u), 0.088 + ry * math.cos(u), z))
     to_obj("Rebreather_Neck_Bellows", grid(bell, lin(0, TAU, 48), lin(0, 1, 110), closed_u=True, pole_v1=True),
-           M["rubber"], coll, parent=root)
+           M["rubber_matte"], coll, parent=root)
     cans = MD()
     for sg in (-1, 1):
         ax = [V((sg * lerp(0.095, 0.172, t), 0.090, 1.596)) for t in lin(0, 1, 12)]
@@ -381,7 +381,7 @@ def build(coll, root):
             return 0.034 * (0.75 + 0.25 * math.sqrt(max(0.0, cap))) + \
                 0.003 * (0.5 + 0.5 * math.cos(TAU * t * 0.077 / 0.0085)) ** 2
         cans.add(L.limb(ax, can_r, 24, nt=40, ref=(0, 0, 1), cap1=True))
-    to_obj("Rebreather_Side_Canisters", cans, M["rubber"], coll, parent=root)
+    to_obj("Rebreather_Side_Canisters", cans, M["rubber_matte"], coll, parent=root)
     for s in (-1, 1):
         pc = V((s * 0.168, 0.118, 1.610))
         metal.add(lathe([(0.0, 0.0), (0.020, 0.0), (0.020, 0.010), (0.011, 0.010), (0.011, 0.006), (0.0, 0.006)], 24)
