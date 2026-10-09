@@ -148,8 +148,8 @@ def build(coll, root):
 
     # ------------------------------------------------------------------ shoulder straps + armhole piping
     for s in (-1, 1):
-        path = catmull_path([V((s * 0.150, -0.180, 1.470)), V((s * 0.160, -0.105, 1.552)), V((s * 0.165, 0.000, 1.578)),
-                             V((s * 0.165, 0.100, 1.560)), V((s * 0.160, 0.180, 1.515))], 8)
+        path = catmull_path([V((s * 0.150, -0.180, 1.470)), V((s * 0.160, -0.105, 1.534)), V((s * 0.165, 0.000, 1.570)),
+                             V((s * 0.165, 0.100, 1.542)), V((s * 0.160, 0.180, 1.515))], 8)     # hugging the shoulder
         straps.add(sweep(path, rect_profile(0.055, 0.020, 3),
                          up=lambda i, p, s=s: (p - V((s * 0.110, 0.0, 1.400))).normalized()))
         pipe = [V((s * (0.190 + 0.010 * math.cos(t)), 0.135 * math.sin(t), 1.290 + 0.287 * math.cos(t)))
@@ -158,7 +158,7 @@ def build(coll, root):
         # lettering marks on top of the right strap
         if s < 0:
             for k in range(6):
-                hard.add(box(0.004, 0.003, 0.006).translate((s * 0.166, -0.030 + k * 0.008, 1.590)))
+                hard.add(box(0.004, 0.003, 0.006).translate((s * 0.166, -0.030 + k * 0.008, 1.582)))
         # edge straps down the back bag sides with stitch dots
         e0 = V((s * 0.168, back_y(0.168) + 0.002, 1.240))
         molle.add(sweep([e0, e0 + V((0, 0, BZ1 - 1.240 - 0.012))], rect_profile(0.030, 0.003), up=(0, 1, 0)))
@@ -247,13 +247,13 @@ def build(coll, root):
             hard.add(tube([m @ q for q in sh], 0.0015, 5, closed=True))
     # side pouches (2 per side) and rear cummerbund pouches
     for s in (-1, 1):
-        p, x, n, z = frame_dir(s * 0.2225, -0.145, 1.186, s, 0, 0.055)
+        p, x, n, z = frame_dir(s * 0.2095, -0.145, 1.186, s, 0, 0.034)     # slim side pouches: outline ~x 0.226
         m = pouch(pouch_c if s < 0 else pouches, flap_c if s < 0 else flaps, trims, metal, p, x, n, z,
-                  0.075, 0.152, 0.055, flap=0.20, bungee=False, md_pipe=hard)
-        sp = [V((0.012 * t * math.cos(t * 5.5), 0.056, 0.035 + 0.012 * t * math.sin(t * 5.5))) for t in lin(0.1, 1.6, 30)]
+                  0.075, 0.152, 0.034, flap=0.20, bungee=False, md_pipe=hard)
+        sp = [V((0.012 * t * math.cos(t * 5.5), 0.035, 0.035 + 0.012 * t * math.sin(t * 5.5))) for t in lin(0.1, 1.6, 30)]
         hard.add(tube([m @ q for q in sp], 0.0014, 5))  # swirl ornament
-        p, x, n, z = frame_dir(s * 0.2125, -0.085, 1.183, s, 0, 0.045)
-        pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.055, 0.145, 0.045, flap=0.20, bungee=False, tab=False,
+        p, x, n, z = frame_dir(s * 0.2065, -0.085, 1.183, s, 0, 0.032)
+        pouch(pouch_c, flap_c, trims, metal, p, x, n, z, 0.055, 0.145, 0.032, flap=0.20, bungee=False, tab=False,
               md_pipe=hard)
         p, x, n, z = frame_dir(s * 0.180, 0.165, 1.1665, s * 0.707, 0.707, 0.055)
         pouch(pouch_w, flap_w, trims, metal, p, x, n, z, 0.080, 0.149, 0.055, flap=0.23, bungee=False,
@@ -316,8 +316,8 @@ def build(coll, root):
 
     # ------------------------------------------------------------------ beaded antenna lead and the whip antenna
     beads = MD()
-    run = catmull_path([V((0.130, -0.195, 1.290)), V((0.130, -0.197, 1.470)), V((0.150, -0.120, 1.565)),
-                        V((0.160, 0.000, 1.598)), V((0.150, 0.110, 1.575)), V((0.120, 0.195, 1.520)),
+    run = catmull_path([V((0.130, -0.195, 1.290)), V((0.130, -0.197, 1.470)), V((0.150, -0.120, 1.549)),
+                        V((0.160, 0.000, 1.590)), V((0.150, 0.110, 1.558)), V((0.120, 0.195, 1.520)),
                         V((0.115, 0.197, 1.120))], 10)
     for q in L.resample(run, int(L.path_length(run) / 0.011)):
         beads.add(uv_sphere(0.006, 10, 6).translate(q))

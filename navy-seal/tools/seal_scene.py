@@ -29,7 +29,8 @@ LENS, SENSOR_W, SHIFT_Y, FSTOP = 135.0, 36.0, 0.161, 8.0
 RES = (2288, 1268)                # 2x the sheet panel
 # view -> (figure X on the dock, rotation about Z)
 # (the LEFT view is placed by its torso's mid-depth, sheet x 534, which the sheet draws 12 px behind the leg axis)
-FIGURES = {"Front": (-0.852, 0.0), "Left": (-0.118, -90.0), "Back": (0.546, 180.0), "Right": (1.389, 90.0)}
+# the side views are turned ~8 deg toward the camera, as the sheet draws them (the far knee and foot show ahead)
+FIGURES = {"Front": (-0.852, 0.0), "Left": (-0.118, -82.0), "Back": (0.546, 180.0), "Right": (1.389, 82.0)}
 # view -> panel columns (sheet px); the panels split at the gaps between the figures
 PANELS = {"Front": (0, 441), "Left": (441, 632), "Back": (632, 897), "Right": (897, 1144)}
 

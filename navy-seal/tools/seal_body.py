@@ -15,11 +15,11 @@ from seal_mats import M
 # --- skeleton anchors (character left side) -----------------------------------------------------------
 HEAD_C = V((0.0, -0.045, 1.705))
 SHOULDER = V((0.219, 0.015, 1.457))     # humeral head: the deltoid adds ~8 cm outside it
-ELBOW = V((0.315, 0.030, 1.170))
-WRIST = V((0.345, -0.080, 0.925))
+ELBOW = V((0.305, 0.030, 1.170))
+WRIST = V((0.337, -0.080, 0.925))
 # the right arm hangs ~2 deg further out (measured on all four views); stored with +X sign, mirrored on use.
-# Lateral spread between the sheet's back view and its (wider) front view.
-ARM_R = (V((0.219, 0.015, 1.457)), V((0.327, 0.030, 1.170)), V((0.358, -0.075, 0.925)))
+# Lateral spread centred between the sheet's back view and its (wider) front view.
+ARM_R = (V((0.219, 0.015, 1.457)), V((0.317, 0.030, 1.170)), V((0.350, -0.075, 0.925)))
 HIP = V((0.100, -0.006, 0.900))
 KNEE = V((0.197, -0.010, 0.480))
 ANKLE = V((0.240, 0.100, 0.100))

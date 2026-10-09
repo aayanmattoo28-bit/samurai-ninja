@@ -67,7 +67,7 @@ def mat_suit(name="Suit_Drysuit_Black", base=(0.0085, 0.0088, 0.0098), line=(0.0
     col = nb.mix(nb.math("MULTIPLY", wet, 0.35), col, (0.006, 0.006, 0.007))
     ao = _ao(nb, 0.04)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.002, 0.002, 0.0025))
-    rough = nb.mixf(wet, 0.36, 0.16)
+    rough = nb.mixf(wet, 0.47, 0.20)                                # satin dry cloth, glossy only where wet
     rough = nb.mixf(nb.math("MULTIPLY", lines, 0.8), rough, 0.30)  # the raised piping is glossier
     # weave + fine crinkle of coated nylon
     wv = nb.n("ShaderNodeTexWave", (-900, -600), wave_type="BANDS", bands_direction="DIAGONAL")
@@ -323,7 +323,7 @@ def build_materials():
                               scuff=0.6, dirt=0.25)
     M["rubber_sole"] = mat_rubber("Rubber_Sole", base=(0.012, 0.012, 0.012), rough=0.55)
     M["screen_dim"] = mat_screen_img("Screen_Dive_Computer", "dive_screen.png", strength=0.3)
-    M["screen_hud"] = mat_screen_img("Screen_Wrist_HUD", "wrist_hud.png", strength=0.45)
+    M["screen_hud"] = mat_screen_img("Screen_Wrist_HUD", "wrist_hud.png", strength=0.35)
     M["plastic_dark"] = mat_polymer("Plastic_Buckle_Dark", base=(0.027, 0.030, 0.033), rough=0.45, grain=800.0)
     M["kydex"] = mat_polymer("Kydex_Black", base=(0.008, 0.009, 0.010), rough=0.30, coat=0.2, grain=1500.0)
     M["led_red"] = mat_screen("LED_Red_Orange", col=(1.0, 0.25, 0.06), strength=4.0)

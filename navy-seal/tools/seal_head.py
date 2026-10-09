@@ -374,22 +374,22 @@ def build(coll, root):
            M["rubber_matte"], coll, parent=root)
     cans = MD()
     for sg in (-1, 1):
-        ax = [V((sg * lerp(0.095, 0.172, t), 0.090, 1.596)) for t in lin(0, 1, 12)]
+        ax = [V((sg * lerp(0.095, 0.142, t), 0.090, 1.596)) for t in lin(0, 1, 12)]   # tucked in, off the shoulders
 
         def can_r(t, u):
             cap = min(1.0, (1 - t) / 0.12)
-            return 0.034 * (0.75 + 0.25 * math.sqrt(max(0.0, cap))) + \
-                0.003 * (0.5 + 0.5 * math.cos(TAU * t * 0.077 / 0.0085)) ** 2
+            return 0.031 * (0.75 + 0.25 * math.sqrt(max(0.0, cap))) + \
+                0.003 * (0.5 + 0.5 * math.cos(TAU * t * 0.047 / 0.0085)) ** 2
         cans.add(L.limb(ax, can_r, 24, nt=40, ref=(0, 0, 1), cap1=True))
     to_obj("Rebreather_Side_Canisters", cans, M["rubber_matte"], coll, parent=root)
     for s in (-1, 1):
-        pc = V((s * 0.168, 0.118, 1.610))
+        pc = V((s * 0.132, 0.114, 1.610))
         metal.add(lathe([(0.0, 0.0), (0.020, 0.0), (0.020, 0.010), (0.011, 0.010), (0.011, 0.006), (0.0, 0.006)], 24)
                   .transform(look_matrix(pc, V((s * 0.5, 0.7, 0.4)).normalized(), (0, 0, 1))))
     tbox(poly, V((0.008, 0.152, 1.640)), V((0, 1, 0)), 0.050, 0.026, 0.018)
 
     # ------------------------------------------------------------------------- the main breathing-hose loop
-    P = [V((0.150, 0.075, 1.608)), V((0.180, -0.035, 1.590)), V((0.162, -0.135, 1.546)), V((0.110, -0.176, 1.519)),
+    P = [V((0.128, 0.068, 1.606)), V((0.176, -0.035, 1.590)), V((0.162, -0.135, 1.546)), V((0.110, -0.176, 1.519)),
          V((0.0, -0.204, 1.508))]
     full = P + [V((-p.x, p.y, p.z)) for p in reversed(P[:-1])]
     hose = corrugated(catmull_path(full, 10), 0.0225, pitch=0.0095, depth=0.0034, n=18)
