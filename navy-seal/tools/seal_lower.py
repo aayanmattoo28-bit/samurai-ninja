@@ -261,7 +261,7 @@ def build(coll, root):
     belt, belt_hw, pouches, flaps, trims, grom, straps, buckles = (MD() for _ in range(8))
     kydex, ropes, cord, pockets, kp_caps, kp_back, rivets = (MD() for _ in range(7))
     boots, soles, mids, laces, bmetal, btrim = (MD() for _ in range(6))
-    led = MD()
+    led, pipe = MD(), MD()
 
     # ------------------------------------------------------------------ battle belt (segmented), buckle, ring, cord
     ths = lin(-math.pi, math.pi, 160)
@@ -309,6 +309,7 @@ def build(coll, root):
     def bp(cx, cy, zc, w, h, d, tgt=(pouches, flaps), flap=0.27, **kw):
         n = V((cx, cy * (BELT_A / BELT_B) ** 2, 0)).normalized()
         p, x, nn, z = frame_dir(cx, cy, zc, n.x, n.y, d)
+        kw.setdefault("md_pipe", pipe)
         return pouch(tgt[0], tgt[1], trims, grom, p, x, nn, z, w, h, d, flap=flap, **kw)
 
     GEAR_FRAMES.clear()
@@ -366,7 +367,7 @@ def build(coll, root):
         xv = (mm.to_3x3() @ V((1, 0, 0))).normalized()
         nv = (mm.to_3x3() @ V((0, 1, 0))).normalized()
         pouch(pouches, flaps, trims, grom, p, xv, nv, V((0, 0, 1)), 0.035, 0.100, 0.030, flap=0.30, bungee=False,
-              bands=1)
+              bands=1, md_pipe=pipe)
     for z_out, z_in in ((0.840, 0.820), (0.760, 0.720)):
         md, bpnt, bn = leg_strap(-1, z_out, z_in, 0.025)
         straps.add(md)
@@ -389,7 +390,7 @@ def build(coll, root):
         xv = (mm.to_3x3() @ V((1, 0, 0))).normalized()
         nv = (mm.to_3x3() @ V((0, 1, 0))).normalized()
         m2 = pouch(pouches, flaps, trims, grom, p, xv, nv, V((0, 0, 1)), 0.060, 0.170, 0.050, flap=0.24, bungee=True,
-                   tab=False, bands=0)
+                   tab=False, bands=0, md_pipe=pipe)
         GEAR_FRAMES.setdefault("left_leg", []).append(m2)
         trims.add(box(0.015, 0.004, 0.015).transform(m2 @ Matrix.Translation((0, 0.055, 0.055))))
     for z_out, z_in in ((0.815, 0.800), (0.725, 0.720)):
@@ -480,11 +481,12 @@ def build(coll, root):
     ob = to_obj("Belt_Cobra_Buckle", buckle, M["metal"], coll, parent=root, smooth=False)
     mod_bevel(ob, 0.0015, 1)
     to_obj("Belt_Lanyard_Cord", cord, M["cable_grey"], coll, parent=root)
-    ob = to_obj("Lower_Pouches", pouches, M["carrier"], coll, parent=root)
+    ob = to_obj("Lower_Pouches", pouches, M["nylon_camo"], coll, parent=root)
     mod_bevel(ob, 0.005, 3)
     mod_subsurf(ob, 1, 1)
-    ob = to_obj("Lower_Pouch_Flaps", flaps, M["carrier"], coll, parent=root)
+    ob = to_obj("Lower_Pouch_Flaps", flaps, M["nylon_camo"], coll, parent=root)
     mod_solidify(ob, 0.004, -1.0)
+    to_obj("Lower_Pouch_Piping", pipe, M["plastic_light"], coll, parent=root)
     to_obj("Lower_Pouch_Trims_Keepers", trims, M["webbing"], coll, parent=root)
     to_obj("Lower_Grommets_Rivets", grom, M["metal_black"], coll, parent=root)
     to_obj("Lower_Straps_Platforms", straps, M["nylon_dark"], coll, parent=root)
