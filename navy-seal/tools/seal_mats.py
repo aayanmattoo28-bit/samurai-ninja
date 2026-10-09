@@ -145,8 +145,10 @@ def mat_nylon_camo(name="Nylon_Camo_Black", base=(0.020, 0.021, 0.022), blot1=(0
     ao = _ao(nb, 0.025)
     col = nb.mix(nb.math("SUBTRACT", 1.0, ao), col, (0.003, 0.003, 0.003))
     h = nb.math("ADD", wsep.outputs[0], nb.math("MULTIPLY", ln, 0.5))
-    p = nb.principled(Base_Color=col, Roughness=nb.mixf(wet, 0.62, 0.30), Specular_IOR_Level=0.5,
-                      Sheen_Weight=0.35, Coat_Weight=nb.math("MULTIPLY", wet, 0.4), Coat_Roughness=0.15,
+    # low, broad dry specular and little sheen so the dark print stays dark and only edges/linework/wet patches catch
+    # the light (a glossier dry fabric veils everything in a flat grey sky reflection)
+    p = nb.principled(Base_Color=col, Roughness=nb.mixf(wet, 0.72, 0.30), Specular_IOR_Level=0.32,
+                      Sheen_Weight=0.12, Coat_Weight=nb.math("MULTIPLY", wet, 0.4), Coat_Roughness=0.15,
                       Normal=nb.bump(h, 0.35, 0.0006, normal=bv))
     nb.output(p.outputs[0])
     m.diffuse_color = (*base, 1)
@@ -224,7 +226,7 @@ def mat_visor(name="Visor_Blue", tint=(0.006, 0.040, 0.170), glow=0.35):
     shade = nb.ramp(gz.outputs[2], [(0.0, 1.0), (0.55, 0.85), (1.0, 0.25)])      # dark band under the helmet brim
     col = nb.mix(nb.math("SUBTRACT", 1.0, shade), col, (0.004, 0.012, 0.035))
     # mirrored cobalt lens: fully metallic so every reflection (sky, sun) comes back tinted deep blue
-    p = nb.principled(Base_Color=col, Metallic=1.0, Roughness=0.05, Coat_Weight=0.25, Coat_Roughness=0.03,
+    p = nb.principled(Base_Color=col, Metallic=1.0, Roughness=0.11, Coat_Weight=0.12, Coat_Roughness=0.07,
                       Emission_Color=(0.01, 0.06, 0.25), Emission_Strength=nb.math("MULTIPLY", shade, glow))
     nb.output(p.outputs[0])
     m.diffuse_color = (*tint, 1)
@@ -292,12 +294,16 @@ def build_materials():
     M["screen"] = mat_screen()
     M["patch_flag"] = mat_patch()
     M["helmet"] = mat_polymer("Helmet_Shell_Cover", base=(0.026, 0.027, 0.030), rough=0.55, grain=900.0)
-    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.008, 0.008, 0.008), blot1=(0.016, 0.015, 0.013),
-                                     blot2=(0.040, 0.037, 0.031), line=(0.26, 0.24, 0.20), tiles=2.6, line_amt=0.75)
-    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.012, 0.010, 0.008), blot1=(0.024, 0.020, 0.016),
-                                    blot2=(0.060, 0.051, 0.040), line=(0.30, 0.265, 0.205), tiles=2.6, line_amt=0.75)
-    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.007, 0.0075, 0.008), blot1=(0.013, 0.014, 0.015),
-                                    blot2=(0.030, 0.031, 0.033), line=(0.20, 0.20, 0.19), tiles=2.6, line_amt=0.75)
+    # near-black printed Cordura with sparse pale linework (the sheet's pouches read dark with light line-art)
+    M["nylon_camo"] = mat_nylon_camo("Pouch_Print_Neutral", base=(0.006, 0.006, 0.0062), blot1=(0.010, 0.0095, 0.009),
+                                     blot2=(0.017, 0.016, 0.014), line=(0.40, 0.37, 0.32), tiles=2.0, line_amt=0.42,
+                                     edge_col=(0.34, 0.32, 0.29))
+    M["camo_warm"] = mat_nylon_camo("Pouch_Print_Warm", base=(0.008, 0.007, 0.006), blot1=(0.014, 0.012, 0.010),
+                                    blot2=(0.024, 0.020, 0.016), line=(0.44, 0.39, 0.30), tiles=2.0, line_amt=0.42,
+                                    edge_col=(0.36, 0.33, 0.28))
+    M["camo_cool"] = mat_nylon_camo("Pouch_Print_Cool", base=(0.005, 0.0055, 0.006), blot1=(0.009, 0.0095, 0.010),
+                                    blot2=(0.014, 0.015, 0.016), line=(0.32, 0.32, 0.31), tiles=2.0, line_amt=0.42,
+                                    edge_col=(0.30, 0.30, 0.30))
     M["belt"] = mat_nylon_camo("Belt_Webbing_Print", base=(0.024, 0.022, 0.019), blot1=(0.042, 0.038, 0.032),
                                blot2=(0.075, 0.068, 0.058), line=(0.24, 0.22, 0.18), tiles=3.2, line_amt=0.7,
                                edge_col=(0.20, 0.19, 0.17))
@@ -314,7 +320,7 @@ def build_materials():
     M["boot"] = L.mat_leather("Boot_Leather_Black", base=(0.011, 0.011, 0.012), light=(0.030, 0.030, 0.033), rough=0.45,
                               scuff=0.6, dirt=0.25)
     M["rubber_sole"] = mat_rubber("Rubber_Sole", base=(0.012, 0.012, 0.012), rough=0.55)
-    M["screen_dim"] = mat_screen_img("Screen_Dive_Computer", "dive_screen.png", strength=1.2)
+    M["screen_dim"] = mat_screen_img("Screen_Dive_Computer", "dive_screen.png", strength=0.3)
     M["screen_hud"] = mat_screen_img("Screen_Wrist_HUD", "wrist_hud.png", strength=0.45)
     M["plastic_dark"] = mat_polymer("Plastic_Buckle_Dark", base=(0.027, 0.030, 0.033), rough=0.45, grain=800.0)
     M["kydex"] = mat_polymer("Kydex_Black", base=(0.008, 0.009, 0.010), rough=0.30, coat=0.2, grain=1500.0)
@@ -331,5 +337,5 @@ def build_materials():
     M["pad_gloss"] = mat_polymer("Elbow_Pad_Gloss", base=(0.0048, 0.0056, 0.0070), rough=0.22, coat=0.6)
     M["gauntlet"] = mat_polymer("Gauntlet_Rubberised", base=(0.0060, 0.0070, 0.0084), rough=0.35, coat=0.4)
     M["bezel"] = mat_metal("Bezel_Steel", base=(0.147, 0.153, 0.168), rough=0.22, edge_col=(0.45, 0.45, 0.47))
-    M["mask"] = mat_polymer("Mask_Respirator_Black", base=(0.016, 0.016, 0.018), rough=0.30, coat=0.35, grain=1200.0)
+    M["mask"] = mat_polymer("Mask_Respirator_Black", base=(0.050, 0.046, 0.044), rough=0.24, coat=0.55, grain=1200.0)
     return M

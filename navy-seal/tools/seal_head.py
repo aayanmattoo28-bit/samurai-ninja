@@ -1,5 +1,5 @@
 """Head (measured from the concept sheet): high-cut ballistic helmet with rail band, forehead arches, NVG shroud +
-flipped-up binocular NVG, rail lights, ring knobs, rear antenna boxes, crown strip, battery box, velcro panels and the
+flipped-up quad-tube NVG, rail lights, ring knobs, rear antenna boxes, crown strip, battery box, velcro panels and the
 rear retention dial; D-shaped comms ear cups; one panoramic blue goggle lens in a rubber frame; a faceted respirator
 with nose ridge, seams and the round regulator; thin beaded jaw hoses; the rebreather's corrugated neck bellows with
 side canisters; and the single continuous corrugated breathing-hose loop that sags across the chest under the chin."""
@@ -183,7 +183,7 @@ def build(coll, root):
               .transform(look_matrix(dial + V((0, 0.012, 0)), (0, 1, 0), (0, 0, 1))))
     tbox(poly, V((0.0, 0.092, 1.668)), V((0, 1, 0)), 0.058, 0.025, 0.008)
 
-    # ------------------------------------------------------------------------- NVG shroud, hinge, flipped-up binocular
+    # ------------------------------------------------------------------------- NVG shroud, hinge, flipped-up quad-tube NVG
     nvg = MD()
     shroud = grid(lambda u, v, i, j: on_shell(math.atan2(lerp(-0.0225, 0.0225, u) / HA, 1.0), lerp(1.738, 1.778, v),
                                               0.004)[0], lin(0, 1, 6), lin(0, 1, 5))
@@ -191,29 +191,29 @@ def build(coll, root):
     nvg.add(torus_md(0.0095, 0.0035, 20, 6).transform(look_matrix(boss, (0, -1, 0), (0, 0, 1))))
     nvg.add(lathe([(0.0, -0.008), (0.006, -0.008), (0.006, 0.004), (0.0, 0.004)], 12)
             .transform(look_matrix(boss, (0, -1, 0), (0, 0, 1))))
-    nvg.add(sweep([boss + V((0, -0.004, 0.006)), V((0.0, -0.213, 1.762))], rect_profile(0.018, 0.012), up=(0, -1, 0.3)))
-    ax = V((0.0, 0.55, 0.83)).normalized()           # ocular tube axis: lower-front -> upper-rear
+    nvg.add(sweep([boss + V((0, -0.004, 0.006)), V((0.0, -0.196, 1.790))], rect_profile(0.018, 0.012), up=(0, -1, 0.3)))
+    ax = V((0.0, 0.85, 0.53)).normalized()           # ocular tube axis: lower-front -> upper-rear
     side = V((1, 0, 0))
     upv = ax.cross(side).normalized()
-    bridge = box(0.035, 0.050, 0.040)
     mb = Matrix((side, ax, upv)).transposed().to_4x4()
-    mb.translation = V((0.0, -0.205, 1.795))
-    nvg.add(bridge.transform(mb))
+    mb.translation = V((0.0, -0.190, 1.818))
+    nvg.add(box(0.122, 0.034, 0.024).transform(mb))                    # quad housing across the four tubes
+    nvg.add(box(0.040, 0.052, 0.034).transform(mb))                    # centre body
     for s in (-1, 1):
-        a = V((s * 0.030, -0.235, 1.755))
-        tb = lathe([(0.0, 0.0), (0.016, 0.0), (0.016, 0.012), (0.015, 0.014), (0.015, 0.060), (0.0155, 0.072),
-                    (0.0, 0.072)], 24)
-        nvg.add(tb.transform(look_matrix(a, ax, (0, 0, 1))))
-        nvg.add(torus_md(0.0125, 0.0040, 24, 6).transform(look_matrix(V((s * 0.050, -0.205, 1.790)), (s, 0, 0), (0, 0, 1))))
-        nvg.add(lathe([(0.0, 0.0), (0.012, 0.0), (0.012, 0.006), (0.0, 0.006)], 16)
-                .transform(look_matrix(V((s * 0.048, -0.205, 1.790)), (s, 0, 0), (0, 0, 1))))
-        nvg.add(torus_md(0.0128, 0.0045, 24, 6).transform(look_matrix(a - ax * 0.002, -ax, (0, 0, 1))))  # eyecup
-        nvg.add(lathe([(0.0, 0.0), (0.0125, 0.0), (0.0, 0.003)], 20).transform(look_matrix(a + ax * 0.004, -ax,
-                                                                                            (0, 0, 1))))
-        nvg.add(box(0.008, 0.008, 0.006).translate((s * 0.009, -0.185, 1.871)))
-        nvg.add(box(0.014, 0.012, 0.012).translate((s * 0.040, -0.222, 1.770)))
-    nvg.add(box(0.037, 0.030, 0.030).translate((0.0, -0.185, 1.853)))
-    nvg.add(box(0.022, 0.016, 0.095).transform(Matrix.Translation((0.0, -0.218, 1.805)) @
+        for xo, r, splay in ((0.0175, 0.0128, 0.0), (0.0505, 0.0122, 0.20)):
+            a = V((s * xo, -0.218 + 0.008 * (xo > 0.03), 1.797))
+            axk = (ax + side * (s * splay)).normalized()                # outer tubes splay out toward the objectives
+            tb = lathe([(0.0, 0.0), (r, 0.0), (r, 0.010), (r - 0.001, 0.012), (r - 0.001, 0.056),
+                        (r + 0.0005, 0.066), (0.0, 0.066)], 24)
+            nvg.add(tb.transform(look_matrix(a, axk, (0, 0, 1))))
+            nvg.add(torus_md(r - 0.0015, 0.0036, 24, 6).transform(look_matrix(a - axk * 0.002, -axk, (0, 0, 1))))
+            LENSES_DARK.add(lathe([(0.0, 0.0), (r - 0.003, 0.0), (0.0, 0.002)], 20)
+                            .transform(look_matrix(a + axk * 0.004, -axk, (0, 0, 1))))
+        nvg.add(torus_md(0.0080, 0.0030, 20, 6).transform(look_matrix(V((s * 0.064, -0.186, 1.822)), (s, 0, 0),
+                                                                        (0, 0, 1))))     # side battery caps
+        nvg.add(box(0.008, 0.008, 0.006).translate((s * 0.009, -0.168, 1.880)))
+    nvg.add(box(0.037, 0.030, 0.030).translate((0.0, -0.168, 1.862)))
+    nvg.add(box(0.022, 0.016, 0.095).transform(Matrix.Translation((0.0, -0.192, 1.846)) @
                                                Matrix.Rotation(math.radians(-25), 4, "X")))   # tall centre bridge
     LENSES.add(box(0.010, 0.002, 0.009).translate((0.0, -0.228, 1.808)))
 
@@ -284,9 +284,9 @@ def build(coll, root):
 
     # ------------------------------------------------------------------------- respirator (faceted)
     # control outline per height: front y, cheek (x, y), rear edge (x, y)
-    RT = [(1.561, -0.160, 0.045, -0.140, 0.050, -0.105), (1.590, -0.178, 0.065, -0.130, 0.075, -0.090),
-          (1.620, -0.182, 0.075, -0.128, 0.084, -0.087), (1.645, -0.186, 0.080, -0.125, 0.088, -0.085),
-          (1.665, -0.180, 0.084, -0.122, 0.090, -0.086)]
+    RT = [(1.561, -0.158, 0.026, -0.146, 0.034, -0.118), (1.590, -0.176, 0.042, -0.146, 0.052, -0.105),
+          (1.620, -0.182, 0.060, -0.136, 0.072, -0.094), (1.645, -0.186, 0.074, -0.127, 0.085, -0.086),
+          (1.665, -0.180, 0.084, -0.122, 0.090, -0.086)]           # narrows to a V at the regulator
 
     def rpt(u, z):
         """u in -1..1 across the mask (0 = nose ridge); piecewise-linear facets through the control outline."""
@@ -295,13 +295,14 @@ def build(coll, root):
         if a < 0.5:
             t = a / 0.5
             x, y = lerp(0.0, xc, t), lerp(yf, yc, t)
-            y -= 0.016 * math.exp(-(a / 0.075) ** 2) * smooth((z - 1.640) / 0.014)  # nose ridge prism
+            w = 0.05 + 0.07 * smooth((z - 1.625) / 0.045)
+            y -= 0.020 * smooth((z - 1.622) / 0.040) * max(0.0, 1.0 - a / w) ** 1.3   # sharp nose ridge prism
         else:
             t = (a - 0.5) / 0.5
             x, y = lerp(xc, xr, t), lerp(yc, yr, t)
         return V((math.copysign(x, u), y, z))
 
-    ro = to_obj("Mask_Respirator", grid(lambda u, v, i, j: rpt(u, lerp(1.561, 1.665, v)), lin(-1, 1, 24), lin(0, 1, 12)),
+    ro = to_obj("Mask_Respirator", grid(lambda u, v, i, j: rpt(u, lerp(1.561, 1.665, v)), lin(-1, 1, 48), lin(0, 1, 16)),
                 M["mask"], coll, parent=root, smooth=False)
     # seams: diagonals from the goggle's outer corners down to the regulator, horizontal one under the nose
     seams = MD()
@@ -312,8 +313,9 @@ def build(coll, root):
     to_obj("Mask_Seams", seams, M["rubber"], coll, parent=root)
     # nose bridge of the mask rising into the goggle's centre notch (splits the lens into two lobes)
     nb_ = MD()
-    nb_.add(grid(lambda u, v, i, j: V((lerp(-0.013, 0.013, u) * (1 - 0.55 * v), lerp(-0.187, -0.170, v)
-                                        + 0.010 * abs(u - 0.5) * 2, lerp(1.660, 1.707, v))), lin(0, 1, 5), lin(0, 1, 5)))
+    nb_.add(grid(lambda u, v, i, j: V((lerp(-0.015, 0.015, u) * (1 - 0.55 * v), lerp(-0.199, -0.173, v)
+                                        + 0.016 * abs(u - 0.5) * 2 * (1 - 0.4 * v), lerp(1.658, 1.707, v))),
+                 lin(0, 1, 5), lin(0, 1, 5)))
     to_obj("Mask_Nose_Bridge", nb_, M["mask"], coll, parent=root, smooth=False)
     mod_solidify(ro, 0.006, 1.0)
     mod_bevel(ro, 0.0015, 1)
@@ -327,16 +329,19 @@ def build(coll, root):
     to_obj("Mask_Seams", rs_t, M["rubber"], coll, parent=root)
     reg = MD()
     axr = V((0, -1, 0))
-    reg.add(lathe([(0.0, 0.0), (0.0275, 0.0), (0.0275, 0.024), (0.0175, 0.026), (0.0175, 0.022), (0.0, 0.022)], 32)
+    reg.add(lathe([(0.0, 0.0), (0.0285, 0.0), (0.0285, 0.016), (0.0265, 0.023), (0.0195, 0.025), (0.0185, 0.020),
+                   (0.0090, 0.019), (0.0085, 0.027), (0.0, 0.028)], 40)     # puck: rim, recessed ring, centre boss
             .transform(look_matrix(REG_C + V((0, 0.026, 0)), axr, (0, 0, 1))))
     reg.add(box(0.065, 0.020, 0.055).translate(REG_C + V((0, 0.035, 0))))
-    for k in range(6):
-        reg.add(box(0.026, 0.002, 0.002).translate(REG_C + V((0, -0.0005, -0.010 + k * 0.004))))
+    for k in range(8):                                                   # radial ribs in the recessed ring
+        a_ = TAU * (k + 0.5) / 8
+        reg.add(box(0.011, 0.0025, 0.0022).transform(Matrix.Translation(REG_C + V((0, 0.006, 0))) @
+                                                     Matrix.Rotation(a_, 4, "Y") @ Matrix.Translation((0.014, 0, 0))))
     for s in (-1, 1):
         reg.add(lathe([(0.0, 0.0), (0.007, 0.0), (0.007, 0.015), (0.0, 0.015)], 12)
                 .transform(look_matrix(V((s * 0.042, -0.160, 1.593)), V((s, 0.6, 0)).normalized(), (0, 0, 1))))
-    to_obj("Mask_Regulator", reg, M["polymer_gloss"], coll, parent=root)
-    metal.add(torus_md(0.0235, 0.0035, 32, 6).transform(look_matrix(REG_C + V((0, 0.003, 0)), axr, (0, 0, 1))))
+    reg.add(torus_md(0.0262, 0.0022, 40, 6).transform(look_matrix(REG_C + V((0, 0.0045, 0)), axr, (0, 0, 1))))
+    to_obj("Mask_Regulator", reg, M["mask"], coll, parent=root)
     jaw = MD()
     for s in (-1, 1):
         P = [V((s * 0.045, -0.158, 1.592)), V((s * 0.068, -0.132, 1.612)), V((s * 0.086, -0.098, 1.635)),
@@ -395,7 +400,7 @@ def build(coll, root):
     # ------------------------------------------------------------------------- remaining objects
     sh = to_obj("NVG_Shroud", shroud, M["metal_black"], coll, parent=root)
     mod_solidify(sh, 0.008, 1.0)
-    no = to_obj("NVG_Binocular_Mount", nvg, M["polymer"], coll, parent=root)
+    no = to_obj("NVG_Quad_Tube_Mount", nvg, M["polymer"], coll, parent=root)
     mod_bevel(no, 0.002, 2)
     to_obj("Helmet_Rail_Band", rails, M["rail"], coll, parent=root)
     to_obj("Helmet_Metal_Bits", metal, M["metal"], coll, parent=root)
@@ -405,6 +410,6 @@ def build(coll, root):
     mod_subsurf(co, 1, 1)
     to_obj("Comms_Ear_Cup_Rings", cupd, M["polymer_gloss"], coll, parent=root)
     to_obj("Helmet_Light_Lenses", LENSES, M["lens_pale"], coll, parent=root)
-    to_obj("NVG_Objective_Lenses", LENSES_DARK, M["lens_dark"], coll, parent=root)
+    to_obj("NVG_Eyepiece_Lenses", LENSES_DARK, M["lens_dark"], coll, parent=root)
     for md in (LENSES, LENSES_DARK, LENSES_VISOR):
         md.v, md.f, md.uv, md.mi, md.hem = [], [], [], [], []

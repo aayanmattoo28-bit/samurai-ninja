@@ -54,7 +54,7 @@ def pouch(md_body, md_flap, md_trim, md_metal, p, x, n, z, w, h, d, flap=0.24, b
           md_pipe=None):
     """Pouch on a surface frame: p = centre of its back face; body w (x) by h (z) by d (n).  Rounded body (bevel
     on the object), overhanging top flap with a pull tab, optional bungee, elastic bands, bottom drain grommet,
-    and (md_pipe) the light piping that outlines the flap on the sheet's chest pouches."""
+    and (md_pipe) the light piping that outlines the flap and binds the body's front edges, as on the sheet."""
     m = Matrix((x, n, z)).transposed().to_4x4()
     m.translation = p
     b = box(w, d, h)
@@ -93,6 +93,13 @@ def pouch(md_body, md_flap, md_trim, md_metal, p, x, n, z, w, h, d, flap=0.24, b
                    [(hw - rc + rc * math.sin(a), zb + rc - rc * math.cos(a)) for a in lin(0.0, math.pi / 2 - 0.3, 4)] +
                    [(hw, zb + rc), (hw, zt)])
         md_pipe.add(tube([m @ V((xx, d + 0.0062, zz)) for xx, zz in outline], 0.0015, 5))
+        # edge binding down the body's front corners and along its bottom edge
+        hb, zb2, rb = w / 2 - 0.0005, -h / 2 + 0.0015, 0.008
+        body = ([(-hb, zb - 0.006), (-hb, zb2 + rb)] +
+                [(-hb + rb - rb * math.cos(a), zb2 + rb - rb * math.sin(a)) for a in lin(0.3, math.pi / 2, 4)] +
+                [(hb - rb + rb * math.sin(a), zb2 + rb - rb * math.cos(a)) for a in lin(0.0, math.pi / 2 - 0.3, 4)] +
+                [(hb, zb2 + rb), (hb, zb - 0.006)])
+        md_pipe.add(tube([m @ V((xx, d - 0.0004, zz)) for xx, zz in body], 0.0013, 5))
     return m
 
 
